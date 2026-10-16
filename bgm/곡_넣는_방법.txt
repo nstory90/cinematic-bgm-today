@@ -1,0 +1,23 @@
+Cinematic BGM Today — 💎 모드(발표용) 곡 넣는 방법
+==========================================
+
+결과 화면의 [💎 모드]를 켜면, 이 폴더의 곡을 가공 없이 그대로 재생합니다.
+(끄면 Tone.js가 카드의 BPM·장르·분위기·날씨로 직접 연주합니다)
+
+아래 "파일 이름" 그대로 이 bgm 폴더에 mp3를 넣어 주세요.
+
+  기분          파일 이름        지금 들어 있는 곡
+  편안한        calm.mp3         Cozy Evening
+  설레는        flutter.mp3      新しい朝の始まり
+  자신 있는     confident.mp3    Bold Entrance
+  집중력 있는   focus.mp3        Focussed Flow
+  지친          tired.mp3        After-Hours Jazz
+  불안한        anxious.mp3      Soft Breathing Space
+  신나는        excited.mp3      Joyful Groove
+
+  오프닝 테마   theme.mp3        Cinematic Prologue  (💎 모드와 상관없이 고르는 동안 흐름)
+
+※ 곡을 바꾸면 index.html 의 Player TRACKS 에 적힌 곡 제목(title)도 함께 바꾸면 화면 안내가 맞게 나옵니다.
+※ 두 기분이 섞인 점심 카드(예: 불안 → 자신감)는 도착할 기분의 곡을 틉니다.
+※ [하루 전체 듣기]는 장면마다 30초씩 이어서 들려줍니다.
+※ 이 곡들은 Suno · producer.ai 무료 플랜으로 생성한 곡입니다 (비상업적 사용).

@@ -1,0 +1,2405 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinematic BGM Today</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@600;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e13;
+    --panel: rgba(23, 23, 31, .72);
+    --line: rgba(255, 255, 255, .1);
+    --text: #f3f1ec;
+    --muted: #a9a7b2;
+    --accent: #f2c14e;
+    --sans: "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    --serif: "Noto Serif KR", "Batang", serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    word-break: keep-all; overflow-wrap: break-word;   /* 한글은 단어 단위로 줄바꿈 */
+    margin: 0; color: var(--text); font-family: var(--sans); line-height: 1.5;
+    background: var(--bg); transition: background-color 1.2s;
+  }
+  /* 배경 층: ① 시간대 하늘 → 날씨 애니메이션 → ② 기분 오로라 → ③ 영화관 질감 */
+  #skyBg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .sky-layer { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
+  #aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  #aurora i {
+    position: absolute; width: 75vmax; height: 75vmax; border-radius: 50%;
+    opacity: 0; transition: opacity 1.6s ease; mix-blend-mode: screen;
+  }
+  #aurora .a { left: -28vmax; bottom: -34vmax; animation: driftA 26s ease-in-out infinite alternate; }
+  #aurora .b { right: -28vmax; top: -30vmax; animation: driftB 30s ease-in-out infinite alternate; }
+  @keyframes driftA { to { transform: translate(14vmax, -10vmax) scale(1.12); } }
+  @keyframes driftB { to { transform: translate(-12vmax, 12vmax) scale(1.15); } }
+  .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .fx.beam {
+    background: conic-gradient(from 180deg at 50% -25%, rgba(255,236,200,.07) 0deg, transparent 13deg,
+      transparent 347deg, rgba(255,236,200,.07) 360deg);
+    animation: flicker 5s infinite;
+  }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 46% { opacity: .8; } 48% { opacity: 1; } 52% { opacity: .75; } 54% { opacity: 1; } }
+  .fx.grain {
+    inset: -50%; width: 200%; height: 200%; opacity: .07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    animation: grain .9s steps(4) infinite;
+  }
+  @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } 100% { transform: translate(0, 0); } }
+  .fx.vignette { background: radial-gradient(ellipse at 50% 42%, transparent 52%, rgba(0,0,0,.55) 100%); }
+  .letterbox { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 20; pointer-events: none; transition: height .7s ease; }
+  .letterbox.top { top: 0; }
+  .letterbox.bottom { bottom: 0; }
+  body.cinema .letterbox { height: min(8vh, 64px); }
+  /* 첫 화면 프롤로그: 짧은 영화 도입부 */
+  .prologue {
+    position: relative; min-height: 420px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; padding: 40px 10px;
+  }
+  .pro-tag { position: absolute; top: 0; left: 0; font-size: 12px; letter-spacing: .2em; color: #ff6b6b; font-weight: 700; }
+  .pro-tag .rec { animation: blink 1s steps(1) infinite; }
+  .pro-tag .tc { color: var(--muted); margin-left: 8px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+  .pro-line {
+    margin: 0; font-family: var(--serif); font-size: clamp(22px, 3.6vw, 34px); line-height: 1.6; font-weight: 600;
+    opacity: 0; transform: translateY(12px); filter: blur(8px); transition: opacity 1.25s ease, transform 1.25s ease, filter 1.25s ease;
+  }
+  .pro-line.on { opacity: 1; transform: none; filter: none; }
+  .pro-line.hero { font-size: clamp(30px, 5.2vw, 52px); font-weight: 900; color: var(--accent); }
+  .pro-sub { margin-top: 14px; color: var(--muted); font-size: 15px; opacity: 0; transition: opacity 1.25s ease; }
+  .pro-sub.on { opacity: 1; }
+  .prologue .skip { position: absolute; right: 0; bottom: 0; }
+  .pro-hint { position: absolute; left: 0; bottom: 6px; font-size: 13px; color: var(--muted); animation: blink 2s steps(1) infinite; }
+  .pro-hint[hidden] { display: none; }
+  body.prologue-mode section.panel { background: rgba(4,4,8,.82); }
+  /* 프롤로그 뒤 기분 카드가 하나씩 떠오름 */
+  .mood-grid.stagger .mood-card { animation: rise .7s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+  #sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+  .wrap { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 76px 16px 64px; }   /* 위 여백: 레터박스(최대 64px)가 내려와도 제목이 가리지 않게 */
+  header.top { text-align: center; margin-bottom: 22px; }
+  header.top .eyebrow { letter-spacing: .3em; font-size: 12px; color: var(--accent); }
+  header.top h1 { font-family: var(--serif); font-size: clamp(34px, 6vw, 56px); margin: 4px 0 2px; letter-spacing: -.01em; }
+  header.top p { color: var(--muted); margin: 0; }
+
+  /* 날씨 배지 */
+  .weather { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .weather-badge {
+    display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+    background: rgba(0,0,0,.28); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 8px 7px 16px; font-size: 14px; backdrop-filter: blur(6px);
+  }
+  .weather-badge .wx-text b { font-weight: 700; }
+  .weather-badge .wx-src { color: var(--muted); font-size: 12px; }
+  .weather-badge button {
+    background: rgba(255,255,255,.1); border: 0; color: var(--text); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .wx-pick { display: none; gap: 6px; }
+  .replay-btn {
+    background: rgba(0,0,0,.28); border: 1px solid var(--line); color: var(--text); border-radius: 999px;
+    padding: 7px 16px; font: inherit; font-size: 14px; cursor: pointer; backdrop-filter: blur(6px);
+  }
+  .replay-btn:hover { background: rgba(255,255,255,.12); }
+  .wx-pick.open { display: inline-flex; }
+  .wx-pick button[aria-pressed="true"] { background: var(--text); color: #111; font-weight: 700; }
+
+  section.panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
+    padding: 28px; margin-bottom: 28px; backdrop-filter: blur(8px);
+  }
+
+  /* 페이지 전환 (스르륵) */
+  .view { opacity: 0; transform: translateY(10px); transition: opacity .56s ease, transform .56s ease; }
+  .view.show { opacity: 1; transform: none; }
+  .view[hidden] { display: none; }
+
+  .q { text-align: center; font-family: var(--serif); font-size: clamp(24px, 4vw, 32px); margin: 8px 0 4px; }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 22px; }
+
+  /* 기분 카드 */
+  .mood-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }   /* 마지막 줄 카드도 가운데 */
+  .mood-card {
+    flex: 0 0 calc((100% - 42px) / 4);
+    position: relative; border: 0; border-radius: 18px; padding: 18px 16px; min-height: 150px;
+    text-align: center; align-items: center; justify-content: center;
+    font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.3); transition: transform .18s, box-shadow .18s, filter .18s, outline-color .18s;
+    outline: 3px solid transparent; outline-offset: 3px; filter: saturate(.85) brightness(.92);
+  }
+  .mood-card:hover { transform: translateY(-4px); filter: none; box-shadow: 0 14px 30px rgba(0,0,0,.4); }
+  .mood-card[aria-pressed="true"] { outline-color: var(--text); filter: none; transform: translateY(-4px) scale(1.02); }
+  .mood-card .emo { font-size: 34px; line-height: 1; }
+  .mood-card .name { font-family: var(--serif); font-weight: 900; font-size: 22px; margin-top: 12px; }
+  .mood-card .desc { font-size: 13px; opacity: .85; }
+  /* 표정으로 기분 읽기 */
+  .face { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0 0 22px; }
+  .face-live { display: flex; gap: 18px; align-items: center; justify-content: center; flex-wrap: wrap; width: 100%; }
+  .face-live[hidden], .face-actions[hidden], .face-start[hidden] { display: none; }
+  .face-cam { position: relative; width: min(340px, 100%); aspect-ratio: 4 / 3; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 8px 22px rgba(0,0,0,.4); }
+  .face-cam video, .face-cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }   /* 거울처럼 */
+  .face-bars { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); }
+  .fb-row { display: grid; grid-template-columns: 76px 1fr 40px; gap: 8px; align-items: center; font-size: 13px; }
+  .fb-row .fb-name { white-space: nowrap; }
+  .fb-row .fb-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .fb-row .fb-fill { height: 100%; width: 0; border-radius: 999px; transition: width .25s; }
+  .fb-row .fb-pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .fb-row.top .fb-name, .fb-row.top .fb-pct { color: var(--text); font-weight: 700; }
+  .face-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .face-msg { margin: 0; font-size: 13px; color: var(--muted); text-align: center; min-height: 1.5em; }
+  .ink-dark { color: #17161c; }
+  .ink-light { color: #fbfaf7; }
+
+  /* 일정 카드 */
+  .sched-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .sched-card {
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--text);
+    border-radius: 16px; padding: 16px 10px; font: inherit; cursor: pointer; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; transition: background .15s, transform .15s, border-color .15s;
+  }
+  .sched-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.3); }
+  .sched-card .emo { font-size: 28px; }
+  .sched-card .name { font-weight: 700; font-size: 16px; }
+  .sched-card .lv { font-size: 11px; color: var(--muted); letter-spacing: .1em; }
+  .sched-card[aria-pressed="true"] { background: var(--text); color: #15141a; border-color: var(--text); }
+  .sched-card[aria-pressed="true"] .lv { color: #55535c; }
+  .sched-card.none { grid-column: span 5; flex-direction: row; justify-content: center; padding: 12px; }
+  .sched-card.none .emo { font-size: 20px; }
+  .q-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin-bottom: 22px; }
+  .q-row .q-text { grid-column: 2; }
+  .q-row .meter { grid-column: 3; justify-self: end; }
+  .q-row .sub { margin-bottom: 0; }
+  .meter {
+    flex: 0 0 auto; margin-top: 4px; padding: 12px 18px; border-radius: 16px; text-align: right;
+    background: rgba(0,0,0,.3); border: 1px solid var(--line); transition: border-color .2s, background .2s;
+  }
+  .meter .m-label { display: block; font-size: 12px; letter-spacing: .15em; color: var(--muted); font-weight: 700; }
+  .meter .m-level { display: block; font-size: 30px; font-weight: 900; line-height: 1.2; margin: 2px 0; }
+  .meter .m-note { display: block; font-size: 13px; color: var(--muted); }
+  .meter[data-level="빡빡"] { border-color: rgba(242,193,78,.7); background: rgba(242,193,78,.12); }
+  .meter[data-level="빡빡"] .m-level { color: var(--accent); }
+  .meter[data-level="여유"] { border-color: rgba(127,216,190,.6); background: rgba(127,216,190,.1); }
+  .meter[data-level="여유"] .m-level { color: #8fe0c6; }
+
+  .nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 26px; }
+  .btn {
+    border: 0; border-radius: 14px; padding: 13px 22px; font: inherit; font-weight: 700; font-size: 16px;
+    cursor: pointer; background: var(--accent); color: #1a1406;
+  }
+  .btn.ghost { background: none; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn.make { display: block; width: 100%; margin-top: 26px; padding: 18px; font-size: 19px; border-radius: 16px; }
+  .pagetop { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+  .back-top {
+    background: rgba(255,255,255,.08); border: 1px solid var(--line); color: var(--text);
+    border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .back-top:hover { background: rgba(255,255,255,.16); }
+
+  /* 영화 오프닝 (문구를 기다리는 동안) */
+  .reel { text-align: center; padding: 30px 0 14px; }
+  .leader {
+    position: relative; width: 240px; height: 240px; margin: 0 auto 30px; border-radius: 50%;
+    border: 5px solid rgba(255,255,255,.6); display: grid; place-items: center; overflow: hidden;
+    background: radial-gradient(circle, rgba(255,255,255,.06), rgba(0,0,0,.25));
+  }
+  .leader::before, .leader::after { content: ""; position: absolute; background: rgba(255,255,255,.25); }
+  .leader::before { width: 100%; height: 3px; }
+  .leader::after { width: 3px; height: 100%; }
+  .leader .hand {
+    position: absolute; left: 50%; top: 50%; width: 50%; height: 5px; margin-top: -2px; background: var(--accent);
+    transform-origin: left center; animation: spin 1.12s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .leader .num { position: relative; z-index: 1; font-family: var(--serif); font-size: 110px; font-weight: 900; line-height: 1; }
+  .op-title { font-family: var(--serif); font-size: 34px; font-weight: 900; margin-bottom: 22px; }
+  .op-scenes { list-style: none; padding: 0; margin: 0 auto 22px; max-width: 620px; text-align: left; }
+  .op-scenes li {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 18px;
+    border-bottom: 1px dashed var(--line); color: var(--muted); transition: color .3s; font-size: 20px;
+  }
+  .op-scenes li .st { font-size: 16px; font-weight: 700; white-space: nowrap; }
+  .op-scenes li.doing { color: var(--text); }
+  .op-scenes li.done { color: var(--text); }
+  .op-scenes li.done .st { color: var(--accent); }
+  .op-music { font-size: 17px; color: var(--text); min-height: 1.5em; margin-bottom: 18px; }
+  .skip { background: none; border: 0; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; text-decoration: underline; padding: 8px; }
+  .typing::after { content: "▍"; margin-left: 1px; opacity: .6; animation: blink .8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 결과 — 영화 포스터 */
+  .poster-head { text-align: center; margin: 4px 0 18px; }
+  .poster-head .eyebrow { font-size: 12px; letter-spacing: .3em; color: var(--muted); }
+  .poster-head h2 { font-family: var(--serif); font-size: clamp(26px, 4.5vw, 40px); margin: 6px 0; }
+  .poster-head .copy { font-size: 18px; color: var(--accent); margin: 0; }
+  .flow {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px;
+    font-size: 14px; color: var(--muted); margin: 12px 0 22px;
+  }
+  .flow b { color: var(--text); }
+  .cards { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 12px; align-items: stretch; }
+  .arrow { align-self: center; font-size: 22px; color: var(--muted); text-align: center; }
+  .card {
+    position: relative; border-radius: 18px; padding: 20px 18px; min-height: 340px;
+    display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  .card .slot { font-size: 12px; letter-spacing: .2em; opacity: .8; font-weight: 700; }
+  #cards .card { cursor: pointer; transition: outline-color .2s; outline: 3px solid transparent; outline-offset: 3px; }
+  #cards .card.selected { outline-color: var(--text); }   /* 누른 장면에 흰 테두리 */
+  .card.now .slot { opacity: 1; }
+  .cards.n2 { grid-template-columns: 1fr auto 1fr; }
+  /* BGM 재생 */
+  .card .play {
+    margin-left: auto; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12px;
+    font-weight: 700; cursor: pointer; background: rgba(0,0,0,.16); color: inherit;
+  }
+  .card.ink-light .play { background: rgba(255,255,255,.22); }
+  .card .play { white-space: nowrap; flex-shrink: 0; }
+  .card .tags > span:not(.sw) { min-width: 0; font-size: 12px; line-height: 1.3; }
+  .card .play:hover { background: rgba(0,0,0,.28); }
+  .card.playing { animation: beat var(--beat, .8s) ease-in-out infinite; }
+  @keyframes beat { 50% { transform: scale(1.015); box-shadow: 0 14px 40px rgba(0,0,0,.5), 0 0 0 4px rgba(255,255,255,.45); } }
+  .music-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .card .scene { font-family: var(--serif); font-size: 20px; font-weight: 900; margin: 2px 0 6px; line-height: 1.35; }
+  .card .mod { font-size: 13px; opacity: .85; }
+  .card .genre { font-size: 17px; font-weight: 700; }
+  .card .bpm { font-size: 44px; font-weight: 900; line-height: 1; margin: 8px 0 2px; letter-spacing: -.02em; }
+  .card .bpm small { font-size: 14px; font-weight: 700; margin-left: 4px; letter-spacing: 0; }
+  .card .tempo { height: 4px; border-radius: 4px; background: rgba(127,127,127,.3); margin-bottom: 8px; }
+  .card .tempo i { display: block; height: 100%; border-radius: 4px; background: currentColor; }
+  .card .lines { margin: 4px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  .card .lines li { margin-bottom: 4px; }
+  .card .tags { margin-top: auto; display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 700; padding-top: 10px; }
+  .card .tags .sw { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; }
+  .status { text-align: center; font-size: 13px; color: var(--muted); margin: 18px 0 14px; min-height: 1.5em; }
+  .result-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .toast { text-align: center; color: var(--accent); font-size: 14px; min-height: 1.5em; margin-top: 10px; }
+
+  /* 기록 — 앨범 커버 */
+  #history[hidden] { display: none; }
+  .albums { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+  .album { cursor: pointer; transition: transform .15s; }
+  .album:hover { transform: translateY(-3px); }
+  /* 감정 타임라인 */
+  .timeline { position: relative; margin: 0 0 6px; }
+  .timeline svg { display: block; width: 100%; height: auto; }
+  .tl-cap { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .tl-tip {
+    position: absolute; pointer-events: none; z-index: 2; min-width: 170px;
+    background: rgba(12,12,18,.95); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 12px; font-size: 13px; line-height: 1.5; transform: translate(-50%, calc(-100% - 10px));
+    opacity: 0; transition: opacity .12s;
+  }
+  .tl-tip.on { opacity: 1; }
+  .tl-tip b { display: block; font-size: 14px; }
+  .tl-tip span { color: var(--muted); }
+  /* 💎 모드 토글 */
+  .premium { display: inline-flex; align-items: center; gap: 10px; }
+  .premium .knob { width: 38px; height: 22px; border-radius: 999px; background: rgba(255,255,255,.18); position: relative; transition: background .2s; }
+  .premium .knob::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: transform .2s;
+  }
+  .premium[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .premium[aria-pressed="true"] .knob { background: var(--accent); }
+  .premium[aria-pressed="true"] .knob::after { transform: translateX(16px); }
+  .album {
+    flex: 0 0 150px; aspect-ratio: 1; border-radius: 10px; padding: 12px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+  .album .date { font-size: 12px; font-weight: 700; opacity: .85; }
+  .album .t { font-family: var(--serif); font-weight: 900; font-size: 15px; line-height: 1.3; }
+  .album .m { font-size: 12px; font-weight: 700; }
+  .history-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .history-head h2 { margin: 0 0 16px; font-size: 20px; }
+  .history-head button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; }
+
+  @media (max-width: 760px) {
+    section.panel { padding: 20px 16px; }
+    .mood-grid { gap: 10px; }
+    .mood-card { flex-basis: calc((100% - 10px) / 2); min-height: 120px; padding: 14px; }
+    .mood-card .name { font-size: 19px; margin-top: 8px; }
+    .sched-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .sched-card.none { grid-column: span 3; }
+    .q-row { display: block; }
+    .meter { text-align: center; width: 100%; margin: 12px 0 0; }
+    .cards.n2 { grid-template-columns: 1fr; }
+    .leader { width: 180px; height: 180px; }
+    .leader .num { font-size: 80px; }
+    .op-title { font-size: 26px; }
+    .op-scenes li { font-size: 16px; padding: 12px 8px; }
+    .op-scenes li .st { font-size: 14px; }
+    .cards { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); }
+    .card { min-height: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .view, .mood-card, .sched-card { transition: none; }
+    .card.playing { animation: none; }
+    .leader .hand { animation: none; }
+    #aurora i, .fx.beam, .fx.grain { animation: none; }
+    .mood-grid.stagger .mood-card { animation: none; }
+    .pro-line { transition: none; }
+  }
+</style>
+<!-- 감성 문구용 LLM 키 설정: Claude 또는 OpenAI (없어도 예시 문구로 동작) -->
+<script src="bgm.config.js"></script>
+</head>
+<body data-weather="맑음">
+<div id="skyBg" aria-hidden="true"></div>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i></div>
+<div class="fx beam" aria-hidden="true"></div>
+<div class="fx grain" aria-hidden="true"></div>
+<div class="fx vignette" aria-hidden="true"></div>
+<div class="letterbox top" aria-hidden="true"></div>
+<div class="letterbox bottom" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="top">
+    <h1>Cinematic BGM Today</h1>
+    <p>오늘의 기분·날씨·일정으로, 하루를 영화처럼 만드는 아침·점심·저녁 BGM</p>
+    <div class="weather">
+      <div class="weather-badge">
+        <span class="wx-text" id="wxText">📍 현재 위치 날씨 확인 중…</span>
+        <span class="wx-src" id="wxSrc"></span>
+        <button type="button" id="wxToggle">바꾸기</button>
+        <span class="wx-pick" id="wxPick"></span>
+      </div>
+      <div class="weather-badge">
+        <span class="wx-text" id="tmText"></span>
+        <span class="wx-src" id="tmSrc"></span>
+        <button type="button" id="tmToggle">바꾸기</button>
+        <span class="wx-pick" id="tmPick"></span>
+      </div>
+      <button type="button" class="replay-btn" id="replayBtn" title="고른 시간대·날씨로 프롤로그 다시 보기">↻ 프롤로그</button>
+    </div>
+  </header>
+
+  <section class="panel">
+    <!-- 1페이지: 지금 기분 -->
+    <!-- 프롤로그: 오늘 하루의 영화가 시작되는 짧은 도입부 -->
+    <div class="view show" id="intro">
+      <div class="prologue">
+        <div class="pro-tag"><span class="rec">●</span> PROLOGUE <span class="tc" id="tc">00:00:00</span></div>
+        <p class="pro-line" id="proLine"></p>
+        <p class="pro-sub" id="proSub"></p>
+        <div class="pro-hint" id="proHint" hidden>🔈 화면을 누르면 오프닝 음악이 시작돼요</div>
+        <button type="button" class="skip" id="introSkip">건너뛰기 →</button>
+      </div>
+    </div>
+
+    <div class="view" id="page1" hidden>
+      <h2 class="q">지금 기분은 어떤가요?</h2>
+      <p class="sub">지금 이 순간, 오늘 영화의 'NOW' 장면이 될 기분을 골라 주세요.</p>
+      <!-- 표정으로 기분 읽기: 브라우저 안의 표정 모델이 실시간으로 7가지 기분 % 를 보여 줌 (영상은 밖으로 안 나감) -->
+      <div class="face" id="face">
+        <button type="button" class="btn face-start" id="faceStart">📷 표정으로 기분 읽기</button>
+        <div class="face-live" id="faceLive" hidden>
+          <div class="face-cam">
+            <video id="faceVideo" autoplay playsinline muted></video>
+            <canvas id="faceBoxes"></canvas>
+          </div>
+          <div class="face-bars" id="faceBars"></div>
+        </div>
+        <div class="face-actions" id="faceActions" hidden>
+          <button type="button" class="btn" id="faceUse" disabled>얼굴을 찾는 중…</button>
+          <button type="button" class="btn ghost" id="faceCancel">취소</button>
+        </div>
+        <p class="face-msg" id="faceMsg">영상은 저장하거나 밖으로 보내지 않고, 이 컴퓨터 안에서만 읽어요 · 아래에서 직접 골라도 돼요</p>
+      </div>
+      <div class="mood-grid" id="moodGrid"></div>
+    </div>
+
+    <!-- 2페이지: 오늘 일정 -->
+    <div class="view" id="page2" hidden>
+      <div class="pagetop">
+        <button type="button" class="back-top" data-nav="prev">← 뒤로</button>
+      </div>
+      <div class="q-row">
+        <div class="q-text">
+          <h2 class="q">오늘은 어떤 일정이 있나요?</h2>
+          <p class="sub">해당하는 일정을 모두 골라 주세요. 바쁜 날일수록 템포가 달라져요.</p>
+        </div>
+        <div class="meter" id="meter"></div>
+      </div>
+      <div class="sched-grid" id="schedGrid"></div>
+      <div class="nav">
+        <button type="button" class="btn ghost" data-nav="prev">← 이전 단계</button>
+        <button type="button" class="btn" data-nav="next">다음 →</button>
+      </div>
+    </div>
+
+    <!-- 3페이지: 원하는 분위기 -->
+    <div class="view" id="page3" hidden>
+      <div class="pagetop">
+        <button type="button" class="back-top" data-nav="prev">← 뒤로</button>
+      </div>
+      <h2 class="q" id="targetQ">저녁엔 어떤 기분이고 싶나요?</h2>
+      <p class="sub" id="targetSub">하루의 마지막 장면, 도착하고 싶은 분위기를 골라 주세요.</p>
+      <div class="mood-grid" id="targetGrid"></div>
+      <div class="nav">
+        <button type="button" class="btn ghost" data-nav="prev">← 이전 단계</button>
+      </div>
+      <button class="btn make" id="makeBtn" disabled>내 하루 BGM 만들기</button>
+    </div>
+
+    <!-- 영화 오프닝: AI가 문구를 쓰는 동안 -->
+    <div class="view" id="opening" hidden>
+      <div class="reel">
+        <div class="leader"><span class="hand"></span><span class="num" id="count">3</span></div>
+        <div class="op-title" id="opTitle">오늘의 영화를 촬영하는 중…</div>
+        <ul class="op-scenes" id="opScenes"></ul>
+        <div class="op-music" id="opMusic"></div>
+        <button type="button" class="skip" id="skipBtn">바로 보기 →</button>
+      </div>
+    </div>
+
+    <!-- 결과: 영화 포스터 -->
+    <div class="view" id="result" hidden>
+      <div class="poster-head">
+        <div class="eyebrow">TODAY'S MOVIE</div>
+        <h2 id="movieTitle"></h2>
+        <p class="copy" id="movieCopy"></p>
+      </div>
+      <div class="flow" id="flow"></div>
+      <div class="cards" id="cards"></div>
+      <div class="status" id="status"></div>
+      <div class="result-actions">
+        <button class="btn" id="playAllBtn">▶ 하루 전체 듣기</button>
+        <button class="btn ghost" id="saveBtn">저장하기</button>
+        <button class="btn ghost" id="imageBtn">이미지 저장</button>
+        <button class="btn ghost" id="againBtn">다시 만들기</button>
+        <button class="btn ghost premium" id="premiumBtn" type="button" aria-pressed="false" title="발표용: 준비한 곡을 그대로 재생">💎 모드 <span class="knob"></span></button>
+      </div>
+      <div class="toast" id="toast"></div>
+      <p class="music-note" id="musicNote">🎹 카드의 BPM·장르·분위기·날씨로 Tone.js가 브라우저에서 바로 연주해요 (무료 · 인터넷 없이 재생)</p>
+      <p class="music-note" id="musicCredit" hidden>🎵 음악 출처: Suno · producer.ai 무료 플랜으로 생성한 곡 (비상업적 사용)</p>
+    </div>
+  </section>
+
+  <!-- 기록 -->
+  <section class="panel" id="history" hidden>
+    <div class="history-head">
+      <h2>최근 7일, 기분 타임라인</h2>
+      <button type="button" id="clearBtn">기록 지우기</button>
+    </div>
+    <div class="timeline" id="timeline"></div>
+    <p class="tl-cap">점 하나가 한 장면이에요 (왼쪽 = 시작 기분, 오른쪽 = 도착 기분) · 앨범을 누르면 그날 결과를 다시 볼 수 있어요</p>
+    <div class="albums" id="albums"></div>
+  </section>
+</div>
+
+<!-- 추천 엔진: 판단은 코드가 한다 (같은 입력 → 항상 같은 결과). selfTest.js 가 이 블록만 떼어 검사합니다. -->
+<script id="engine">
+var BGM = (function () {
+  // 4-1. 분위기 → 장르 → 대표 BPM → 대표 컬러
+  var MOODS = [
+    { id: "편안", label: "편안한", adj: "편안한", emoji: "🌿", feel: "마음이 고요해요", wish: "편안하게 마무리", genres: ["어쿠스틱", "로파이"], bpm: 78, colors: ["#E9DCC4", "#A9BC9C"],
+      image: "자장가로", title: "오늘의 엔딩 크레딧",
+      now: ["마음이 고요한 지금, 그 여유를 그대로 이어 갑니다.", "서두르지 않는 리듬으로 이 장면을 엽니다."],
+      arrive: ["하루를 내려놓고 편안함에 도착했습니다.", "따뜻한 소리가 오늘의 엔딩 크레딧이 됩니다."] },
+    { id: "설렘", label: "설레는", adj: "설레는", emoji: "💗", feel: "뭔가 기대돼요", wish: "내일이 기다려지게", genres: ["시티팝", "인디팝"], bpm: 108, colors: ["#FF8F7E", "#FFCBA6"],
+      image: "두근거림으로", title: "두근거림의 시작",
+      now: ["뭔가 좋은 일이 생길 것 같은 순간입니다.", "가볍게 튀는 리듬으로 기대감을 키웁니다."],
+      arrive: ["저녁이 되자 내일이 기다려지기 시작합니다.", "반짝이는 멜로디로 설렘을 남겨 둡니다."] },
+    { id: "자신감", label: "자신 있는", adj: "자신감 넘치는", emoji: "🔥", feel: "오늘은 해낼 것 같아요", wish: "해냈다는 기분으로", genres: ["펑크", "힙합"], bpm: 118, colors: ["#E9B53C", "#C9372F"],
+      image: "박수로", title: "주인공은 마지막에 웃는다",
+      now: ["오늘은 준비가 끝났다는 걸 몸이 먼저 압니다.", "단단한 비트로 첫 걸음을 힘 있게 내딛습니다."],
+      arrive: ["오늘을 해낸 사람만 듣는 음악입니다.", "힘 있는 그루브로 승리의 장면을 완성합니다."] },
+    { id: "집중", label: "집중력 있는", adj: "집중하는", emoji: "🎯", feel: "머리가 맑아요", wish: "한 가지에 몰입하게", genres: ["신스웨이브", "클래식 피아노"], bpm: 100, colors: ["#1E2D5A", "#5FC4A6"],
+      image: "메트로놈으로", title: "몰입의 시간",
+      now: ["머릿속이 맑게 정리된 지금입니다.", "일정한 박자가 생각의 흐름을 붙잡아 줍니다."],
+      arrive: ["흩어졌던 하루가 한 점으로 모였습니다.", "차분한 반복 리듬이 마지막 몰입을 돕습니다."] },
+    { id: "지침", label: "지친", adj: "지친", emoji: "🌙", feel: "몸이 무거워요", wish: "천천히 가라앉게", genres: ["재즈", "어쿠스틱 발라드"], bpm: 68, colors: ["#5F7593", "#A895CF"],
+      image: "느린 왈츠로", title: "느리게 걷는 밤",
+      now: ["몸이 무거운 날, 억지로 끌어올리지 않습니다.", "느린 선율로 지친 마음을 먼저 안아 줍니다."],
+      arrive: ["오늘은 충분히 애썼으니, 천천히 쉬어도 됩니다.", "느린 재즈가 지친 하루를 조용히 덮어 줍니다."] },
+    { id: "불안", label: "불안한", adj: "불안한", emoji: "🌫️", feel: "조금 긴장돼요", wish: "마음을 털어놓듯", genres: ["앰비언트", "로파이"], bpm: 72, colors: ["#9CCBEB", "#F1F6FA"],
+      image: "떨리는 숨으로", title: "숨을 고르는 사람",
+      now: ["긴장되는 마음을 숨기지 않아도 괜찮습니다.", "느린 숨처럼 잔잔한 소리로 마음을 가라앉힙니다."],
+      arrive: ["복잡한 마음도 오늘 하루의 일부로 받아들입니다.", "잔잔한 소리 속에서 숨을 천천히 고릅니다."] },
+    { id: "신남", label: "신나는", adj: "신나는", emoji: "🎉", feel: "에너지가 넘쳐요", wish: "축제처럼 신나게", genres: ["댄스팝", "K-팝"], bpm: 125, colors: ["#D93A94", "#FFD43B"],
+      image: "축제로", title: "오늘은 축제",
+      now: ["신나는 기분, 그 에너지를 그대로 씁니다.", "빠른 비트로 이 장면을 화려하게 엽니다."],
+      arrive: ["하루의 끝을 축제처럼 마무리합니다.", "터지는 비트로 오늘의 하이라이트를 장식합니다."] }
+  ];
+  var MOOD = {};
+  MOODS.forEach(function (m) { MOOD[m.id] = m; });
+
+  // 날씨 보정: 장르 수식어만 바뀜
+  var WEATHER = {
+    "맑음": { emoji: "☀️", mod: "밝은 기타", scene: "햇살 아래", noun: "햇살이" },
+    "흐림": { emoji: "☁️", mod: "잔잔한", scene: "구름 낀", noun: "회색 구름이" },
+    "비":   { emoji: "🌧️", mod: "빗소리 섞인", scene: "빗속의", noun: "빗소리가" },
+    "눈":   { emoji: "❄️", mod: "벨 소리가 들어간", scene: "눈 내리는", noun: "눈송이가" }
+  };
+
+  // 날씨 서비스(Open-Meteo)의 날씨 코드 → 4가지 날씨
+  function weatherFromCode(code) {
+    code = Number(code);
+    if ([71, 73, 75, 77, 85, 86].indexOf(code) !== -1) return "눈";
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95) return "비";
+    if (code === 0 || code === 1) return "맑음";
+    return "흐림";
+  }
+
+  // 4-2. 일정 키워드 점수 (같은 단어는 한 번만 셈)
+  var KEYWORDS = [
+    ["회의", 2], ["보고", 2], ["발표", 2], ["마감", 2], ["야근", 2],
+    ["미팅", 1], ["외근", 1], ["운동", 1],
+    ["휴가", -2], ["연차", -2], ["휴식", -2]
+  ];
+
+  function scoreSchedule(text) {
+    text = String(text || "");
+    var hits = KEYWORDS.filter(function (k) { return text.indexOf(k[0]) !== -1; })
+      .map(function (k) { return { word: k[0], score: k[1] }; });
+    var score = hits.reduce(function (s, h) { return s + h.score; }, 0);
+    var level, adjust;
+    if (score < 0) { level = "여유"; adjust = -10; }
+    else if (score >= 4) { level = "빡빡"; adjust = 10; }
+    else { level = "보통"; adjust = 0; }
+    return { hits: hits, score: score, level: level, adjust: adjust };
+  }
+
+  // 앱을 켠 시각 → 시간대 (5~11시 아침, 11~17시 점심, 그 외 저녁)
+  var SLOTS = ["아침", "점심", "저녁"];
+  var TIMELINE = ["아침", "점심", "저녁", "밤"];
+  var SLOT_INFO = {
+    "아침": { en: "MORNING", scene: "출근길", emoji: "🌅" },
+    "점심": { en: "LUNCH", scene: "점심 산책", emoji: "🍱" },
+    "저녁": { en: "EVENING", scene: "귀갓길", emoji: "🌆" },
+    "밤":   { en: "NIGHT", scene: "잠들기 전", emoji: "🌙" }
+  };
+  function slotOfHour(h) { return h >= 5 && h < 11 ? "아침" : h >= 11 && h < 17 ? "점심" : "저녁"; }
+  // 맑은 날도 저녁엔 노을, 밤엔 별빛
+  function sceneWord(weather, time) {
+    if (weather === "맑음") return { "저녁": "노을 진", "밤": "별빛 아래" }[time] || WEATHER[weather].scene;
+    return WEATHER[weather].scene;
+  }
+
+  // 4-3. 기분 전환 흐름 — 앱을 켠 시간부터 남은 장면만 보여 줌
+  //   아침에 켜면: 아침(NOW, 지금 기분) → 점심(중간값 + 일정 보정) → 저녁(원하는 분위기)
+  //   점심에 켜면: 점심(NOW, 지금 기분) → 저녁(원하는 분위기)
+  //   저녁에 켜면: 저녁(NOW, 지금 기분) → 밤(원하는 분위기)
+  function recommend(input) {
+    var from = MOOD[input.mood], to = MOOD[input.target], w = WEATHER[input.weather];
+    if (!from || !to || !w) throw new Error("기분·날씨·원하는 분위기를 모두 골라 주세요");
+    var slot = SLOTS.indexOf(input.slot) !== -1 ? input.slot : "아침";
+    var sched = scoreSchedule(input.schedule);
+    var keep = from.id === to.id;
+
+    var nowCard = { kind: "now", mod: w.mod, genre: from.genres.join(" · "), bpm: from.bpm, colors: from.colors.slice(), mood: from.id };
+    var arrive = { kind: "plan", mod: sched.level === "빡빡" ? "회복용 부드러운" : w.mod,
+      genre: to.genres.join(" · "), bpm: to.bpm, colors: to.colors.slice(), mood: to.id };
+    var lunch = null, cards;
+
+    if (slot === "아침") {
+      // 점심은 아침·저녁 사이에서만 움직임 (두 기분의 BPM이 가까울 때 흐름을 벗어나지 않도록)
+      var mid = Math.round((from.bpm + to.bpm) / 2);
+      var lunchBpm = mid + sched.adjust;
+      if (!keep) lunchBpm = Math.max(Math.min(from.bpm, to.bpm), Math.min(Math.max(from.bpm, to.bpm), lunchBpm));
+      lunch = { mid: mid, shift: lunchBpm - mid, capped: lunchBpm - mid !== sched.adjust };
+      cards = [nowCard, { kind: "plan", mod: w.mod,
+        genre: keep ? from.genres[1] + " · " + from.genres[0] : from.genres[1] + " × " + to.genres[0],
+        bpm: lunchBpm, colors: [from.colors[1], to.colors[0]], mood: keep ? from.id : from.id + "→" + to.id }, arrive];
+    } else {
+      cards = [nowCard, arrive];
+    }
+    var start = TIMELINE.indexOf(slot);
+    cards.forEach(function (c, i) {
+      c.time = TIMELINE[start + i];
+      c.slot = SLOT_INFO[c.time].en + " · " + c.time + (c.kind === "now" ? "  ▶ NOW" : "");
+    });
+
+    var rec = {
+      input: { mood: from.id, weather: input.weather, target: to.id, schedule: String(input.schedule || "").trim(), slot: slot },
+      slot: slot, from: from.id, to: to.id, keep: keep, sched: sched, cards: cards, lunch: lunch
+    };
+    applyText(rec, fallbackText(rec));
+    return rec;
+  }
+
+  // LLM 실패 시 쓰는 예시 문구 (규칙으로 만들어 항상 같은 결과)
+  // 예시 문구 재료 — 영화 제목: [출발할 때 꾸밈말, 도착할 때 꾸밈말] → "떨리는 아침, 박수받는 저녁"
+  var TITLE_WORD = {
+    "편안": ["고요한", "포근한"], "설렘": ["두근대는", "반짝이는"], "자신감": ["당당한", "박수받는"],
+    "집중": ["또렷한", "몰입하는"], "지침": ["무거운", "느리게 쉬는"], "불안": ["떨리는", "숨 고르는"], "신남": ["들뜬", "축제 같은"]
+  };
+  // 점심(중간 장면): [출발 기분의 주어, 도착 기분 쪽으로 가는 서술] → "떨리던 숨이 조금씩 힘을 얻어 갑니다."
+  var MIDWAY = {
+    "편안": ["고요하던 마음이", "조금씩 느긋해집니다."], "설렘": ["들뜨던 마음이", "기분 좋게 두근대기 시작합니다."],
+    "자신감": ["단단하던 걸음이", "조금씩 힘을 얻어 갑니다."], "집중": ["또렷하던 생각이", "한곳으로 모여 갑니다."],
+    "지침": ["무겁던 몸이", "천천히 속도를 늦춥니다."], "불안": ["떨리던 숨이", "조금씩 조심스러워집니다."],
+    "신남": ["들썩이던 어깨가", "점점 신이 나기 시작합니다."]
+  };
+  var HIGH_ENERGY = { "자신감": 1, "설렘": 1, "신남": 1 };   // 회복용 저녁이라도 리듬의 힘은 살린다고 말할 기분
+
+  // 받침이 있으면 a, 없으면 b ("보고를" / "발표를", "회의가" / "마감이")
+  function josa(word, a, b) {
+    var c = word.charCodeAt(word.length - 1);
+    return word + (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0 ? a : b);
+  }
+  // 맑은 날도 저녁엔 노을, 밤엔 별빛 (카피의 주어 · 첫 장면의 날씨 한마디)
+  function weatherNoun(weather, time) {
+    if (weather === "맑음") return { "저녁": "노을이", "밤": "별빛이" }[time] || WEATHER[weather].noun;
+    return WEATHER[weather].noun;
+  }
+  function weatherLead(weather, time) {
+    if (weather === "맑음") return { "저녁": "노을빛을 받으며", "밤": "별빛 아래에서" }[time] || "쏟아지는 햇살을 받으며";
+    return { "비": "창밖 빗소리를 박자 삼아", "눈": "창밖 눈송이를 바라보며", "흐림": "구름 낀 하늘 아래" }[weather];
+  }
+
+  function fallbackText(rec) {
+    var from = MOOD[rec.from], to = MOOD[rec.to], wx = rec.input.weather, s = rec.sched;
+    var first = rec.cards[0].time, last = rec.cards[rec.cards.length - 1].time;
+    // 고른 일정 이름 (바쁜 쪽 / 쉬는 쪽, 최대 2개) — "보고·회의"
+    var words = function (pos) {
+      return s.hits.filter(function (h) { return pos ? h.score > 0 : h.score < 0; })
+        .slice(0, 2).map(function (h) { return h.word; }).join("·");
+    };
+    var busy = words(true), rest = words(false);
+    var eve = to.arrive.slice();
+    if (s.level === "빡빡") {
+      eve[1] = josa(busy || "바쁜 일정", "을", "를") + " 마친 " + last + ", " +
+        (HIGH_ENERGY[to.id] ? "리듬의 힘은 살리고 소리는 부드럽게 다듬었습니다." : "소리는 부드럽게 골라 몸을 풀어 줍니다.");
+    }
+    var lines = rec.cards.map(function (c, i) {
+      if (c.kind === "now") return [from.now[0], weatherLead(wx, first) + ", " + from.now[1]];
+      if (rec.lunch && i === 1) {
+        var sh = rec.lunch.shift, any = s.hits.map(function (h) { return h.word; }).slice(0, 2).join("·");
+        return [rec.keep ? from.adj + " 기분을 그대로 이어 가는 한낮입니다." : MIDWAY[from.id][0] + " " + MIDWAY[to.id][1],
+          sh > 0 ? josa(busy, "이", "가") + " 몰린 한낮, 걸음에 맞춰 템포를 올립니다."
+          : sh < 0 ? (rest ? rest + "의 여유에 맞춰" : "여유로운 일정에 맞춰") + " 템포를 한 박자 늦춥니다."
+          : any ? any + " 사이의 한낮, 두 장르를 섞어 자연스럽게 다리를 놓습니다."
+          : "두 장르를 섞어 자연스럽게 다리를 놓습니다."];
+      }
+      return eve;
+    });
+    return {
+      movieTitle: rec.keep ? from.title : TITLE_WORD[from.id][0] + " " + first + ", " + TITLE_WORD[to.id][1] + " " + last,
+      copy: rec.keep ? weatherNoun(wx, first) + " 배경음이 되는, " + from.adj + " 하루" : weatherNoun(wx, first) + " " + to.image + " 바뀌는 날",
+      cards: rec.cards.map(function (c, i) {
+        return { scene: "Scene " + (i + 1) + ". " + sceneWord(rec.input.weather, c.time) + " " + SLOT_INFO[c.time].scene, lines: lines[i] };
+      })
+    };
+  }
+
+  function applyText(rec, t) {
+    rec.movieTitle = t.movieTitle;
+    rec.copy = t.copy;
+    rec.cards.forEach(function (c, i) { c.scene = t.cards[i].scene; c.lines = t.cards[i].lines.slice(0, 2); });
+  }
+
+  // Claude 에게 줄 요청: 판단 결과를 넘기고 문구만 받는다
+  function buildPrompt(rec) {
+    var system = [
+      "너는 사용자의 하루를 한 편의 영화처럼 만들어 주는 BGM 큐레이터다.",
+      "장르·BPM은 이미 정해져 있으니 바꾸지 말고, 그에 어울리는 감성 문구만 한국어로 쓴다.",
+      "특정 곡 제목이나 가수 이름은 절대 쓰지 않는다.",
+      "반드시 아래 형식의 JSON 하나만 출력한다. 다른 말은 쓰지 않는다.",
+      '{"movieTitle":"오늘의 영화 제목(15자 이내)","copy":"한 줄 카피(25자 이내)",' +
+      '"cards":[{"scene":"Scene 1. 장면 제목","lines":["플레이리스트 설명 1(40자 이내)","설명 2(40자 이내)"]},' +
+      '{"scene":"Scene 2. ...","lines":["...","..."]},{"scene":"Scene 3. ...","lines":["...","..."]}]}',
+      "cards 는 아래 '카드' 목록과 같은 시간대 순서로 정확히 " + rec.cards.length + "개다. " +
+      "첫 카드('지금')는 현재 기분을 인정하고, 마지막 카드는 원하는 분위기에 도착하는 흐름으로 쓴다."
+    ].join("\n");
+    var user = {
+      켠시간대: rec.slot, 지금기분: rec.from, 원하는분위기: rec.to, 날씨: rec.input.weather,
+      일정: rec.input.schedule || "(없음)", 일정강도: rec.sched.level, 유지형: rec.keep,
+      카드: rec.cards.map(function (c) { return { 시간대: c.time, 종류: c.kind === "now" ? "지금" : "앞으로", 기분: c.mood, 장르: c.mod + " " + c.genre, BPM: c.bpm }; })
+    };
+    return { system: system, user: JSON.stringify(user) };
+  }
+
+  // Claude 응답 검사: 형식이 틀리면 null → 예시 문구 유지
+  function parseLLM(text, n) {
+    try {
+      var s = String(text), a = s.indexOf("{"), b = s.lastIndexOf("}");
+      if (a < 0 || b <= a) return null;
+      var o = JSON.parse(s.slice(a, b + 1));
+      var str = function (v, max) { return typeof v === "string" && v.trim() && v.length <= max; };
+      if (!str(o.movieTitle, 40) || !str(o.copy, 60)) return null;
+      if (!Array.isArray(o.cards) || o.cards.length !== (n || 3)) return null;
+      for (var i = 0; i < o.cards.length; i++) {
+        var c = o.cards[i];
+        if (!c || !str(c.scene, 50) || !Array.isArray(c.lines) || c.lines.length < 2) return null;
+        if (!str(c.lines[0], 90) || !str(c.lines[1], 90)) return null;
+      }
+      return o;
+    } catch (e) { return null; }
+  }
+
+  // ---------- 표정으로 기분 읽기 ----------
+  // 표정 모델이 주는 7가지 표정(합 100%) → 우리 7가지 기분으로 나눠 담기
+  //   표정 하나의 몫은 여러 기분에 나눠 주고, 각 줄의 합은 1 → 기분 퍼센트도 합이 100%
+  var EXPR_TO_MOOD = {
+    neutral:   { "편안": 0.45, "집중": 0.40, "자신감": 0.15 },                 // 무표정 = 차분하거나 집중
+    happy:     { "신남": 0.40, "설렘": 0.25, "자신감": 0.20, "편안": 0.15 },   // 웃음
+    surprised: { "설렘": 0.40, "신남": 0.35, "불안": 0.25 },                   // 놀람
+    sad:       { "지침": 0.75, "불안": 0.25 },                                 // 슬픔
+    angry:     { "자신감": 0.45, "집중": 0.30, "불안": 0.25 },                 // 굳은 표정 = 결의·몰입
+    fearful:   { "불안": 0.85, "지침": 0.15 },                                 // 두려움
+    disgusted: { "지침": 0.50, "집중": 0.30, "불안": 0.20 }                    // 찡그림
+  };
+  // expr: { neutral: 0.7, happy: 0.2, ... } → [{ id: "편안", pct: 32 }, ...] (MOODS 순서, 정수 합 100)
+  function moodPercents(expr) {
+    var raw = {}, total = 0;
+    MOODS.forEach(function (m) { raw[m.id] = 0; });
+    Object.keys(EXPR_TO_MOOD).forEach(function (k) {
+      var p = Math.max(0, Number(expr && expr[k]) || 0);
+      Object.keys(EXPR_TO_MOOD[k]).forEach(function (id) { raw[id] += p * EXPR_TO_MOOD[k][id]; });
+      total += p;
+    });
+    if (!total) return MOODS.map(function (m) { return { id: m.id, pct: 0 }; });
+    // 반올림 오차는 소수점이 큰 순서로 1씩 나눠 줌 (합이 정확히 100)
+    var rows = MOODS.map(function (m, i) { var v = raw[m.id] / total * 100; return { id: m.id, pct: Math.floor(v), rest: v - Math.floor(v), i: i }; });
+    var left = 100 - rows.reduce(function (s, r) { return s + r.pct; }, 0);
+    rows.slice().sort(function (a, b) { return b.rest - a.rest || a.i - b.i; }).slice(0, left).forEach(function (r) { r.pct++; });
+    return rows.map(function (r) { return { id: r.id, pct: r.pct }; });
+  }
+  function topMood(pcts) {
+    return pcts.reduce(function (a, b) { return b.pct > a.pct ? b : a; }).id;
+  }
+
+  // 여러 명이 화면에 있을 때 "나"를 고르는 규칙
+  //   1) 직전에 고른 얼굴과 많이 겹치는 얼굴이 있으면 그 사람을 계속 따라감 (뒤사람이 잠깐 커져도 안 바뀜)
+  //      단, 다른 얼굴이 1.5배 이상 크면 (그 사람이 카메라 앞으로 나옴) 그쪽으로 넘어감
+  //   2) 처음이거나 놓쳤으면: 가장 크게 보이는 얼굴 (= 카메라에 가장 가까운 사람)
+  //   3) 크기 차이가 15% 안쪽이면: 화면 가운데에 더 가까운 얼굴
+  // faces: [{ x, y, w, h }] (화면 좌표), prev: 직전 "나"의 상자 또는 null, W·H: 화면 크기 → 고른 얼굴의 번호 (-1 = 없음)
+  function iou(a, b) {
+    var x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    var x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+    var inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+    return inter / (a.w * a.h + b.w * b.h - inter || 1);
+  }
+  function pickMainFace(faces, prev, W, H) {
+    if (!faces || !faces.length) return -1;
+    var area = function (f) { return f.w * f.h; };
+    var biggest = faces.reduce(function (best, f, i) { return area(f) > area(faces[best]) ? i : best; }, 0);
+    if (prev) {
+      var keep = -1, bestO = 0.3;
+      faces.forEach(function (f, i) { var o = iou(f, prev); if (o >= bestO) { bestO = o; keep = i; } });
+      if (keep !== -1 && area(faces[biggest]) < area(faces[keep]) * 1.5) return keep;
+    }
+    var dist = function (f) { var dx = f.x + f.w / 2 - W / 2, dy = f.y + f.h / 2 - H / 2; return dx * dx + dy * dy; };
+    var near = faces.map(function (f, i) { return i; })
+      .filter(function (i) { return area(faces[i]) >= area(faces[biggest]) * 0.85; });
+    return near.reduce(function (best, i) { return dist(faces[i]) < dist(faces[best]) ? i : best; }, near[0]);
+  }
+
+  return {
+    MOODS: MOODS, MOOD: MOOD, WEATHER: WEATHER, KEYWORDS: KEYWORDS, weatherFromCode: weatherFromCode,
+    SLOTS: SLOTS, TIMELINE: TIMELINE, SLOT_INFO: SLOT_INFO, slotOfHour: slotOfHour,
+    scoreSchedule: scoreSchedule, recommend: recommend, fallbackText: fallbackText,
+    applyText: applyText, buildPrompt: buildPrompt, parseLLM: parseLLM,
+    EXPR_TO_MOOD: EXPR_TO_MOOD, moodPercents: moodPercents, topMood: topMood, pickMainFace: pickMainFace
+  };
+})();
+</script>
+
+<!-- 배경: 날씨를 움직이는 그림으로 표현 -->
+<script>
+var Sky = (function () {
+  var cv = document.getElementById("sky"), ctx = cv.getContext("2d");
+  var W = 0, H = 0, mode = null, parts = [], clouds = [], stars = [], t = 0, raf = null, time = "점심";
+  var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var rnd = function (a, b) { return a + Math.random() * (b - a); };
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (mode) build(mode);
+  }
+
+  function build(m) {
+    var area = W * H / (1280 * 800);
+    parts = []; clouds = [];
+    var n;
+    if (m === "비") {
+      n = Math.round(160 * area);
+      for (var i = 0; i < n; i++) parts.push({ x: rnd(0, W), y: rnd(0, H), len: rnd(10, 22), v: rnd(9, 16), a: rnd(.15, .45) });
+      for (i = 0; i < 4; i++) clouds.push({ x: rnd(0, W), y: rnd(-40, H * .15), r: rnd(180, 320), v: rnd(.05, .15), a: .16, c: "120,135,160" });
+    } else if (m === "눈") {
+      n = Math.round(130 * area);
+      for (i = 0; i < n; i++) parts.push({ x: rnd(0, W), y: rnd(0, H), r: rnd(1, 3.4), v: rnd(.4, 1.3), ph: rnd(0, 6.28), a: rnd(.4, .9) });
+    } else if (m === "흐림") {
+      for (i = 0; i < 8; i++) clouds.push({ x: rnd(-200, W), y: rnd(-60, H * .5), r: rnd(200, 380), v: rnd(.08, .25), a: rnd(.08, .14), c: "190,196,210" });
+    } else {
+      n = Math.round(45 * area);
+      for (i = 0; i < n; i++) parts.push({ x: rnd(0, W), y: rnd(0, H), r: rnd(1, 2.6), v: rnd(.15, .45), ph: rnd(0, 6.28), a: rnd(.2, .6) });
+      stars = [];
+      for (i = 0; i < Math.round(140 * area); i++) stars.push({ x: rnd(0, 1), y: rnd(0, .75), r: rnd(.5, 1.7), ph: rnd(0, 6.28), a: rnd(.3, .9) });
+    }
+  }
+
+  function drawCloud(c) {
+    var g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+    g.addColorStop(0, "rgba(" + c.c + "," + c.a + ")");
+    g.addColorStop(1, "rgba(" + c.c + ",0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, c.r * 1.6, c.r, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function frame() {
+    t += 1;
+    ctx.clearRect(0, 0, W, H);
+    clouds.forEach(function (c) {
+      drawCloud(c);
+      if (!still) { c.x += c.v; if (c.x - c.r * 1.6 > W) c.x = -c.r * 1.6; }
+    });
+    if (mode === "비") {
+      ctx.lineCap = "round"; ctx.lineWidth = 1.2;
+      parts.forEach(function (p) {
+        ctx.strokeStyle = "rgba(170,200,240," + p.a + ")";
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.len * .25, p.y + p.len); ctx.stroke();
+        if (!still) { p.y += p.v; p.x -= p.v * .25; if (p.y > H) { p.y = -p.len; p.x = rnd(0, W + 100); } }
+      });
+    } else if (mode === "눈") {
+      parts.forEach(function (p) {
+        ctx.fillStyle = "rgba(255,255,255," + p.a + ")";
+        ctx.beginPath(); ctx.arc(p.x + Math.sin(t / 60 + p.ph) * 12, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        if (!still) { p.y += p.v; if (p.y > H + 5) { p.y = -5; p.x = rnd(0, W); } }
+      });
+    } else if (mode === "맑음") {
+      if (time === "밤") {   // 맑은 밤: 반짝이는 별과 달빛
+        stars.forEach(function (st) {
+          ctx.fillStyle = "rgba(255,255,255," + (st.a * (.55 + .45 * Math.sin(t / 40 + st.ph))) + ")";
+          ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2); ctx.fill();
+        });
+        var mg = ctx.createRadialGradient(W * .8, H * .14, 0, W * .8, H * .14, 170);
+        mg.addColorStop(0, "rgba(230,236,255,.28)"); mg.addColorStop(1, "rgba(230,236,255,0)");
+        ctx.fillStyle = mg; ctx.fillRect(0, 0, W, H);
+        raf = still ? null : requestAnimationFrame(frame);
+        return;
+      }
+      // 해 위치: 아침은 왼쪽 아래, 점심은 오른쪽 위, 저녁은 오른쪽 아래 노을
+      var SUN = { "아침": [.18, 1.02, "255,186,150"], "점심": [.82, -.04, "255,206,120"], "저녁": [.78, 1.02, "255,140,80"] }[time] || [.82, -.04, "255,206,120"];
+      var pulse = 1 + Math.sin(t / 90) * .06;
+      var g = ctx.createRadialGradient(W * SUN[0], H * SUN[1], 0, W * SUN[0], H * SUN[1], 480 * pulse);
+      g.addColorStop(0, "rgba(" + SUN[2] + ",.38)"); g.addColorStop(1, "rgba(" + SUN[2] + ",0)");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      parts.forEach(function (p) {
+        ctx.fillStyle = "rgba(255,220,150," + (p.a * (.6 + .4 * Math.sin(t / 50 + p.ph))) + ")";
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        if (!still) { p.y -= p.v; p.x += Math.sin(t / 80 + p.ph) * .2; if (p.y < -5) { p.y = H + 5; p.x = rnd(0, W); } }
+      });
+    }
+    raf = still ? null : requestAnimationFrame(frame);
+  }
+
+  function set(m) {
+    mode = m;
+    build(m);
+    if (raf) cancelAnimationFrame(raf);
+    frame();
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  return { set: set, setTime: function (tm) { time = tm; if (mode) set(mode); } };
+})();
+</script>
+
+<!-- 💎 모드 (발표용): bgm 폴더에 넣어 둔 분위기별 곡을 가공 없이 그대로 재생 -->
+<script>
+var Player = (function () {
+  // 분위기 → 곡 파일 (bgm/곡_넣는_방법.txt 참고)
+  var TRACKS = {
+    "편안":  { file: "calm.mp3",      title: "Cozy Evening" },
+    "설렘":  { file: "flutter.mp3",   title: "新しい朝の始まり" },
+    "자신감": { file: "confident.mp3", title: "Bold Entrance" },
+    "집중":  { file: "focus.mp3",     title: "Focussed Flow" },
+    "지침":  { file: "tired.mp3",     title: "After-Hours Jazz" },
+    "불안":  { file: "anxious.mp3",   title: "Soft Breathing Space" },
+    "신남":  { file: "excited.mp3",   title: "Joyful Groove" }
+  };
+  var audio = null, cutTimer = null;
+
+  // 카드 → 곡 (두 기분이 섞인 점심 카드는 도착할 기분의 곡)
+  function trackOf(card) {
+    var parts = String(card.mood).split("→"), mood = parts[parts.length - 1], tr = TRACKS[mood];
+    return { mood: mood, src: "bgm/" + tr.file, title: tr.title };
+  }
+
+  function fade(a, to, ms, done) {
+    clearInterval(a._fade);
+    var from = a.volume, t0 = Date.now();
+    a._fade = setInterval(function () {
+      var k = Math.min(1, (Date.now() - t0) / ms);
+      a.volume = from + (to - from) * k;
+      if (k === 1) { clearInterval(a._fade); if (done) done(); }
+    }, 30);
+  }
+
+  function stop() {
+    clearTimeout(cutTimer);
+    if (!audio) return;
+    var a = audio; audio = null;
+    a.onended = a.onerror = null;
+    fade(a, 0, 500, function () { a.pause(); });
+  }
+
+  // opt: { loop: 반복, seconds: 이만큼만 듣고 onend, onend, onerror: 파일이 없을 때 }
+  function play(card, opt) {
+    opt = opt || {};
+    stop();
+    var t = trackOf(card), a = new Audio(t.src);
+    a.loop = !!opt.loop;
+    a.volume = 0;
+    var done = function () { if (audio === a) { stop(); if (opt.onend) opt.onend(); } };
+    a.onerror = function () { if (audio === a) audio = null; if (opt.onerror) opt.onerror(t.src); };
+    a.onended = done;
+    if (opt.seconds) cutTimer = setTimeout(done, opt.seconds * 1000);   // 하루 전체 듣기: 장면마다 일정 시간만
+    audio = a;
+    var pr = a.play();
+    if (pr && pr.catch) pr.catch(function () {});   // 파일 없음은 onerror 에서 처리
+    fade(a, 0.9, 800);
+    return t;
+  }
+
+  return { play: play, stop: stop, trackOf: trackOf, TRACKS: TRACKS };
+})();
+</script>
+
+<!-- Tone.js 15.1.22 (lib 폴더에 내려받아 둠 — 인터넷 없이도 재생) -->
+<script src="lib/Tone.js"></script>
+<!-- 표정으로 기분 읽기: face-api (MIT) + 모델을 담은 파일 — 없거나 실패해도 기분 카드로 고르면 됨 -->
+<script src="lib/face-api.js"></script>
+<script src="lib/face-models.js"></script>
+
+<!-- BGM 연주: 카드의 장르·BPM·분위기·날씨로 Tone.js 가 브라우저에서 바로 음악을 만들어 연주 -->
+<script>
+var Music = (function () {
+  var T = window.Tone;
+
+  // 분위기별 편곡: 조성(key), 코드 진행, 드럼, 화음 악기, 베이스, 멜로디, 스윙
+  var STYLE = {
+    "편안":  { key: 53, prog: "major",   drums: "lofi",   harm: "pluck", bass: "soft",   lead: "sparse", swing: .25, crackle: true },
+    "설렘":  { key: 50, prog: "citypop", drums: "pop",    harm: "ep",    bass: "octave", lead: "hook",   swing: 0 },
+    "자신감": { key: 52, prog: "funk",    drums: "hiphop", harm: "stab",  bass: "funk",   lead: "none",   swing: .15 },
+    "집중":  { key: 50, prog: "minor",   drums: "synth",  harm: "pad",   bass: "pulse",  lead: "arp",    swing: 0 },
+    "지침":  { key: 51, prog: "jazz",    drums: "brush",  harm: "ep",    bass: "walk",   lead: "none",   swing: .4 },
+    "불안":  { key: 49, prog: "ambient", drums: "none",   harm: "pad",   bass: "drone",  lead: "sparse", swing: 0, crackle: true },
+    "신남":  { key: 48, prog: "major",   drums: "dance",  harm: "saw",   bass: "octave", lead: "hook",   swing: 0 }
+  };
+  // 4마디 코드 진행 (근음에서 반음 거리) — 진행마다 편곡 3가지(A·B·C)
+  var PROG = {
+    major: [
+      [[0, 4, 7, 11], [9, 12, 16, 19], [5, 9, 12, 16], [7, 11, 14, 17]],    // I-vi-IV-V
+      [[0, 4, 7, 11], [7, 11, 14, 17], [9, 12, 16, 19], [5, 9, 12, 16]],    // I-V-vi-IV
+      [[5, 9, 12, 16], [7, 11, 14, 17], [4, 7, 11, 14], [9, 12, 16, 19]]],  // IV-V-iii-vi
+    citypop: [
+      [[5, 9, 12, 16], [4, 7, 11, 14], [2, 5, 9, 12], [0, 4, 7, 11]],
+      [[2, 5, 9, 12], [7, 11, 14, 17], [4, 7, 11, 14], [9, 12, 16, 19]],
+      [[5, 9, 12, 16], [7, 11, 14, 17], [0, 4, 7, 11], [9, 12, 16, 19]]],
+    funk: [
+      [[0, 3, 7, 10], [0, 3, 7, 10], [5, 9, 12, 15], [5, 9, 12, 15]],
+      [[0, 3, 7, 10], [5, 9, 12, 15], [0, 3, 7, 10], [7, 10, 14, 17]],
+      [[0, 3, 7, 10], [3, 7, 10, 14], [5, 9, 12, 15], [0, 3, 7, 10]]],
+    minor: [
+      [[0, 3, 7, 10], [8, 12, 15, 19], [3, 7, 10, 14], [10, 14, 17, 21]],
+      [[0, 3, 7, 10], [5, 8, 12, 15], [8, 12, 15, 19], [7, 11, 14, 17]],
+      [[0, 3, 7, 10], [10, 14, 17, 21], [8, 12, 15, 19], [7, 10, 14, 17]]],
+    jazz: [
+      [[2, 5, 9, 12], [7, 11, 14, 17], [0, 4, 7, 11], [9, 13, 16, 19]],
+      [[0, 4, 7, 11], [9, 12, 16, 19], [2, 5, 9, 12], [7, 11, 14, 17]],
+      [[4, 7, 11, 14], [9, 13, 16, 19], [2, 5, 9, 12], [7, 11, 14, 17]]],
+    ambient: [
+      [[0, 3, 7, 14], [8, 12, 15, 19], [0, 3, 7, 14], [10, 14, 17, 21]],
+      [[0, 3, 7, 14], [5, 8, 12, 15], [3, 7, 10, 14], [10, 14, 17, 21]],
+      [[0, 3, 7, 14], [3, 7, 10, 14], [8, 12, 15, 19], [5, 8, 12, 15]]]
+  };
+  var KEY_SHIFT = [0, 2, -3];                                    // 편곡마다 조성도 조금씩
+  var HOOKS = [{ 0: 2, 3: 1, 6: 2, 10: 3, 12: 2 }, { 0: 3, 4: 2, 8: 1, 10: 2, 14: 3 }, { 2: 1, 6: 2, 8: 3, 12: 2, 14: 1 }];
+  // 오늘 날짜 + 날씨 + 기분으로 편곡을 고름: 같은 날 같은 입력이면 같은 곡, 날이 바뀌면 다른 곡
+  function variantOf(mood, weather) {
+    var d = new Date(), key = d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate() + weather + mood, h = 0;
+    for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 9973;
+    return h % 3;
+  }
+  // 한 마디 16칸: k 킥, s 스네어, c 박수, h 하이햇, o 열린 하이햇
+  var DRUMS = {
+    lofi:   { k: [0, 7, 10], s: [4, 12], h: [0, 2, 4, 6, 8, 10, 12, 14], vel: .7 },
+    pop:    { k: [0, 8, 11], s: [4, 12], h: [0, 2, 4, 6, 8, 10, 12, 14], vel: .75 },
+    hiphop: { k: [0, 3, 10, 11], s: [4, 12], h: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], vel: .85 },
+    synth:  { k: [0, 4, 8, 12], s: [4, 12], h: [2, 6, 10, 14], vel: .8 },
+    brush:  { k: [0], s: [], h: [0, 4, 6, 8, 12, 14], vel: .45 },
+    none:   { k: [], s: [], h: [], vel: 0 },
+    dance:  { k: [0, 4, 8, 12], s: [], c: [4, 12], h: [], o: [2, 6, 10, 14], vel: .9 }
+  };
+
+  // 카드 → 연주 설정 (점심처럼 두 기분이 섞인 카드는 화음은 앞 기분, 리듬은 뒤 기분)
+  function specOf(card, weather) {
+    var parts = String(card.mood).split("→");
+    var harm = STYLE[parts[0]] || STYLE["편안"], groove = STYLE[parts[parts.length - 1]] || harm;
+    return { bpm: card.bpm, harm: harm, groove: groove, weather: weather, soft: card.mod === "회복용 부드러운",
+      variant: variantOf(parts[0], weather) };
+  }
+
+  // 전체 출력: 리미터(소리 깨짐 방지) + 공용 리버브
+  function makeMaster() {
+    var lim = new T.Limiter(-1).toDestination();
+    var input = new T.Gain(0.8).connect(lim);
+    var reverb = new T.Reverb({ decay: 3.5, wet: 1 }).connect(lim);
+    return { input: input, reverb: reverb, ready: reverb.ready, nodes: [lim, input, reverb] };
+  }
+
+  // 한 카드의 악기 묶음
+  function build(spec, master) {
+    var nodes = [], h = spec.harm, g = spec.groove;
+    var n = function (x) { nodes.push(x); return x; };
+    var vol = function (x, db) { x.volume.value = db; return x; };
+    var out = n(new T.Gain(0)).connect(master.input);
+    var tone = n(new T.Filter(spec.soft ? 2200 : 16000, "lowpass")).connect(out);
+    n(new T.Gain(h.harm === "pad" ? 0.45 : 0.22)).connect(master.reverb);
+    out.connect(nodes[nodes.length - 1]);
+    var F = function (freq, type, q) { var f = n(new T.Filter(freq, type)); if (q) f.Q.value = q; return f; };
+
+    var r = { spec: spec, out: out, nodes: nodes, n: 0 };
+    r.kick = vol(n(new T.MembraneSynth({ pitchDecay: 0.05, octaves: 6, envelope: { attack: 0.001, decay: 0.35, sustain: 0, release: 0.1 } })), -6).chain(tone);
+    r.snare = vol(n(new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.16, sustain: 0 } })), -14).chain(F(1800, "bandpass", 0.7), tone);
+    r.hat = vol(n(new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.04, sustain: 0 } })), -24).chain(F(7000, "highpass"), tone);
+    r.ohat = vol(n(new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.22, sustain: 0 } })), -27).chain(F(7000, "highpass"), tone);
+    r.clap = vol(n(new T.NoiseSynth({ envelope: { attack: 0.002, decay: 0.12, sustain: 0 } })), -12).chain(F(1200, "bandpass", 1), tone);
+    r.bass = vol(n(new T.MonoSynth({ oscillator: { type: "triangle" }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.2 },
+      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.4, baseFrequency: 150, octaves: 2.5 } })), -9).chain(tone);
+
+    var chorus = n(new T.Chorus(2, 2.5, 0.4).start());
+    chorus.connect(tone);
+    if (h.harm === "pluck") r.chord = vol(n(new T.PolySynth(T.Synth, { oscillator: { type: "triangle8" },
+      envelope: { attack: 0.003, decay: 0.7, sustain: 0, release: 0.5 } })), -16).connect(chorus);
+    if (h.harm === "ep") r.chord = vol(n(new T.PolySynth(T.FMSynth, { harmonicity: 3, modulationIndex: 1.5,
+      envelope: { attack: 0.01, decay: 1.4, sustain: 0.15, release: 1.2 }, modulationEnvelope: { attack: 0.01, decay: 0.4, sustain: 0, release: 0.2 } })), -17).connect(chorus);
+    if (h.harm === "stab") r.chord = vol(n(new T.PolySynth(T.Synth, { oscillator: { type: "square" },
+      envelope: { attack: 0.004, decay: 0.14, sustain: 0, release: 0.08 } })), -21).chain(F(1800, "lowpass"), tone);
+    if (h.harm === "pad") r.chord = vol(n(new T.PolySynth(T.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 25 },
+      envelope: { attack: 0.7, decay: 0.5, sustain: 0.7, release: 1.6 } })), -24).chain(F(900, "lowpass"), tone);
+    if (h.harm === "saw") r.chord = vol(n(new T.PolySynth(T.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 20 },
+      envelope: { attack: 0.004, decay: 0.18, sustain: 0, release: 0.1 } })), -21).chain(F(2600, "lowpass"), tone);
+
+    if (h.lead !== "none") {
+      var delay = n(new T.FeedbackDelay("8n.", 0.22)); delay.wet.value = 0.25; delay.connect(tone);
+      r.lead = vol(n(new T.Synth({ oscillator: { type: h.lead === "arp" ? "square" : "triangle" },
+        envelope: { attack: 0.01, decay: 0.25, sustain: 0.2, release: 0.4 } })), h.lead === "arp" ? -25 : -16).connect(delay);
+    }
+    if (h.crackle) r.crackle = vol(n(new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.006, sustain: 0 } })), -32).chain(F(2500, "highpass"), tone);
+
+    // 날씨 배경음: 비 = 빗소리, 흐림 = 바람, 눈 = 종소리, 맑음 = 새소리
+    if (spec.weather === "비") vol(n(new T.Noise("pink")), -26).chain(F(2500, "bandpass", 0.4), out).start();
+    if (spec.weather === "흐림") {
+      var wind = n(new T.AutoFilter({ frequency: 0.1, baseFrequency: 200, octaves: 2 }).start()); wind.connect(out);
+      vol(n(new T.Noise("brown")), -24).connect(wind).start();
+    }
+    if (spec.weather === "눈") r.bell = vol(n(new T.PolySynth(T.FMSynth, { harmonicity: 3.01, modulationIndex: 12,
+      envelope: { attack: 0.001, decay: 1.6, sustain: 0, release: 1 }, modulationEnvelope: { attack: 0.001, decay: 1, sustain: 0 } })), -22).connect(out);
+    if (spec.weather === "맑음") r.bird = vol(n(new T.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.02 } })), -30).connect(out);
+    return r;
+  }
+
+  var hz = function (m) { return T.Frequency(m, "midi").toFrequency(); };
+
+  // 16분음표 한 칸 연주 (time: 오디오 시각)
+  function step(r, time, d16) {
+    var sp = r.spec, h = sp.harm, n = r.n++, s = n % 16, bar = Math.floor(n / 16);
+    var v = sp.variant || 0, key = h.key + KEY_SHIFT[v];
+    var chord = PROG[h.prog][v][bar % 4];
+    var notes = chord.map(function (x) { return hz(key + 12 + x); });
+    var root = key - 12 + (chord[0] % 12), barLen = 16 * d16;
+
+    var D = DRUMS[sp.groove.drums], dv = D.vel * (sp.soft ? 0.55 : 1);
+    if (D.k.indexOf(s) !== -1) r.kick.triggerAttackRelease("C1", "8n", time, dv);
+    if (D.s.indexOf(s) !== -1) r.snare.triggerAttackRelease("16n", time, dv);
+    if (D.c && D.c.indexOf(s) !== -1) r.clap.triggerAttackRelease("16n", time, dv);
+    if (D.h.indexOf(s) !== -1) r.hat.triggerAttackRelease("32n", time, dv * (s % 4 === 0 ? 1 : 0.6));
+    if (D.o && D.o.indexOf(s) !== -1) r.ohat.triggerAttackRelease("8n", time, dv);
+
+    if (h.harm === "pluck" && (s === 0 || s === 8)) notes.forEach(function (f, i) { r.chord.triggerAttackRelease(f, 0.6, time + i * 0.022, 0.8); });
+    if (h.harm === "ep" && (h.prog === "jazz" ? [0, 8] : [0, 6, 10]).indexOf(s) !== -1)
+      r.chord.triggerAttackRelease(notes, h.prog === "jazz" ? barLen * 0.5 : d16 * 3, time, 0.7);
+    if (h.harm === "stab" && [3, 6, 14].indexOf(s) !== -1) r.chord.triggerAttackRelease(notes.slice(0, 3), d16, time, 0.8);
+    if (h.harm === "pad" && s === 0) r.chord.triggerAttackRelease(notes, barLen * 0.95, time, 0.6);
+    if (h.harm === "saw" && [2, 6, 10, 14].indexOf(s) !== -1) r.chord.triggerAttackRelease(notes.slice(0, 3), d16, time, 0.8);
+
+    var B = function (m, dur, v) { r.bass.triggerAttackRelease(hz(m), dur, time, v); };
+    if (h.bass === "soft" && (s === 0 || s === 8)) B(root, d16 * 6, 0.8);
+    if (h.bass === "octave" && s % 2 === 0) B(root + (s % 4 === 2 ? 12 : 0), d16 * 1.6, 0.8);
+    if (h.bass === "funk" && [0, 3, 7, 10, 11].indexOf(s) !== -1) B(root + (s === 7 ? 12 : s === 11 ? 10 : 0), d16 * 1.5, 1);
+    if (h.bass === "pulse" && s % 2 === 0) B(root, d16 * 1.5, 0.7);
+    if (h.bass === "walk" && s % 4 === 0) B(root + [0, chord[1] % 12, chord[2] % 12, chord[2] % 12 + 2][s / 4], d16 * 3.6, 0.9);
+    if (h.bass === "drone" && s === 0) B(root, barLen, 0.6);
+
+    if (r.lead) {
+      if (h.lead === "sparse" && bar % 2 === 1 && [0, 6, 12].indexOf(s) !== -1) r.lead.triggerAttackRelease(notes[[2, 1, 3][s / 6]] * 2, d16 * 5, time, 0.8);
+      if (h.lead === "hook") { var hk = HOOKS[v][s]; if (hk !== undefined) r.lead.triggerAttackRelease(notes[hk] * 2, d16 * 2, time, 0.9); }
+      if (h.lead === "arp") r.lead.triggerAttackRelease(notes[s % 4] * (s >= 8 ? 4 : 2), d16 * 0.9, time, 0.6);
+    }
+    if (r.crackle && (n * 7) % 5 === 0) r.crackle.triggerAttackRelease("64n", time + ((n * 13) % 7) * 0.01, 1);
+    if (r.bell && s === 0 && bar % 2 === 0) r.bell.triggerAttackRelease(notes[3] * 4, 1.5, time, 0.7);
+    if (r.bird && s === 9 && bar % 2 === 1) { r.bird.triggerAttackRelease(3200, 0.07, time); r.bird.triggerAttackRelease(3800, 0.07, time + 0.12); }
+
+    if (r.bars && n + 1 === r.bars * 16 && r.onend) {   // 정해진 마디를 다 연주하면 다음으로
+      var cb = r.onend; r.onend = null;
+      T.getDraw().schedule(cb, time + d16);
+    }
+  }
+
+  function dispose(r, after) {
+    setTimeout(function () { r.nodes.forEach(function (x) { try { x.dispose(); } catch (e) {} }); }, after);
+  }
+
+  // ---------- 실시간 재생 ----------
+  var master = null, rig = null, loop = null;
+  // opt: { bars: 몇 마디 뒤 onend (0이면 계속), morph: 템포를 천천히 바꿈, onend }
+  function play(card, weather, opt) {
+    opt = opt || {};
+    if (!T) return Promise.reject(new Error("Tone.js 없음"));
+    return T.start().then(function () {
+      if (!master) master = makeMaster();
+      var tr = T.getTransport(), spec = specOf(card, weather);
+      var next = build(spec, master), prev = rig;
+      next.bars = opt.bars || 0; next.onend = opt.onend || null;
+      rig = next;
+      next.out.gain.rampTo(1, prev ? 1 : 0.4);
+      if (prev) { prev.onend = null; prev.out.gain.rampTo(0, 1); dispose(prev, 1500); }   // 이전 곡은 서서히 사라짐
+
+      if (tr.state === "started" && opt.morph) tr.bpm.rampTo(spec.bpm, 2);   // 하루 전체 듣기: 템포가 자연스럽게 변함
+      else tr.bpm.value = spec.bpm;
+      tr.swing = spec.groove.swing; tr.swingSubdivision = "8n";
+      if (!loop) loop = new T.Loop(function (time) { if (rig) step(rig, time, T.Time("16n").toSeconds()); }, "16n").start(0);
+      if (tr.state !== "started") tr.start("+0.05");
+    });
+  }
+  function stop() {
+    if (!rig) return;
+    var r = rig; rig = null; r.onend = null;
+    r.out.gain.rampTo(0, 0.5); dispose(r, 900);
+    setTimeout(function () { if (!rig) T.getTransport().stop(); }, 700);
+  }
+
+  // ---------- 검사용: 소리를 미리 만들어 봄 (화면에는 쓰지 않음) ----------
+  function render(card, weather, seconds) {
+    return T.Offline(function (ctx) {
+      var m = makeMaster(), r = build(specOf(card, weather), m), tr = ctx.transport;
+      r.out.gain.value = 1;
+      tr.bpm.value = card.bpm; tr.swing = r.spec.groove.swing; tr.swingSubdivision = "8n";
+      new T.Loop(function (time) { step(r, time, 60 / card.bpm / 4); }, "16n").start(0);
+      return m.ready.then(function () { tr.start(0); });
+    }, seconds).then(function (buf) { return buf.get(); });
+  }
+
+  // ---------- 오프닝 효과음: 필름 카운트다운 "뚜·뚜·뚜·띠" + 영사기 소리 ----------
+  function beep(final) {
+    if (!T) return;
+    T.start().then(function () {
+      if (!master) master = makeMaster();
+      var b = new T.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.003, decay: 0.05, sustain: 0.7, release: 0.06 } }).connect(master.input);
+      b.volume.value = final ? -11 : -15;
+      b.triggerAttackRelease(final ? 2000 : 1000, final ? 0.45 : 0.14);
+      setTimeout(function () { b.dispose(); }, 1200);
+    }).catch(function () {});
+  }
+  var proj = null;
+  function projector(on) {
+    if (!T) return;
+    if (!on) {
+      if (proj) { var p = proj; proj = null; p.out.gain.rampTo(0, 0.4); setTimeout(function () { p.nodes.forEach(function (x) { try { x.dispose(); } catch (e) {} }); }, 700); }
+      return;
+    }
+    if (proj) return;
+    T.start().then(function () {
+      if (!master) master = makeMaster();
+      var out = new T.Gain(0).connect(master.input);
+      var clatter = new T.Gain(0).connect(out);                       // 24번/초로 덜컥이는 필름 소리
+      var lfo = new T.LFO({ frequency: 24, min: 0, max: 1, type: "square" }).connect(clatter.gain).start();
+      var bp = new T.Filter(1400, "bandpass").connect(clatter);
+      var noise = new T.Noise("pink").connect(bp).start();
+      noise.volume.value = -14;
+      out.gain.rampTo(0.35, 0.4);
+      proj = { out: out, nodes: [noise, bp, lfo, clatter, out] };
+    }).catch(function () {});
+  }
+
+  return { play: play, stop: stop, render: render, specOf: specOf, STYLE: STYLE, ok: !!T, beep: beep, projector: projector };
+})();
+</script>
+
+<!-- 화면 동작 -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { mood: null, weather: "맑음", target: null, sched: [], slot: BGM.slotOfHour(new Date().getHours()) };
+  var current = null;   // 지금 화면에 보이는 결과
+  var runId = 0;        // 다시 만들기 중 늦게 온 Claude 응답 무시용
+  var HISTORY_KEY = "bgm-history-v1";
+
+  function hexLum(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    var c = [n >> 16, (n >> 8) & 255, n & 255].map(function (v) {
+      v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function inkFor(colors) { return (hexLum(colors[0]) + hexLum(colors[1])) / 2 > 0.33 ? "ink-dark" : "ink-light"; }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  // ---------- 페이지 전환: 스르륵 사라졌다가 스르륵 나타남 ----------
+  var busy = false;
+  function go(id) {
+    var next = $(id), cur = document.querySelector(".view.show");
+    if (busy) { setTimeout(function () { go(id); }, 120); return; }   // 전환 중이면 끝난 뒤에
+    if (!next || cur === next) return;
+    var leaveCam = id !== "page1" && !!faceStream;   // 다른 화면으로 가면 카메라는 끔
+    if (leaveCam) faceFreeze();                        // 사라지는 동안엔 마지막 장면 그대로 (기분 카드가 비치지 않게)
+    busy = true;
+    var panel = next.closest("section.panel");
+    clearTimeout(panel._sizeT);
+    panel.style.transition = ""; panel.style.height = panel.offsetHeight + "px"; panel.style.overflow = "hidden";   // 사라지는 동안 상자 크기 고정
+    if (cur) cur.classList.remove("show");
+    setTimeout(function () {
+      if (cur) cur.hidden = true;
+      if (leaveCam) faceStop();   // 화면이 다 사라진 뒤에 카메라 정리
+      next.hidden = false;
+      var from = panel.offsetHeight;   // 다음 화면에 맞는 높이를 재고
+      panel.style.height = "auto";
+      var to = panel.offsetHeight;
+      panel.style.height = from + "px";
+      void panel.offsetWidth;
+      panel.style.transition = "height .6s cubic-bezier(.45, 0, .2, 1)";   // 상자가 부드럽게 늘어나거나 줄어듦
+      panel.style.height = to + "px";
+      panel._sizeT = setTimeout(function () { panel.style.transition = ""; panel.style.height = ""; panel.style.overflow = ""; }, 650);
+      void next.offsetWidth;          // 다시 그려야 나타나는 효과가 보임
+      next.classList.add("show");
+      busy = false;
+      var top = document.querySelector("section.panel").getBoundingClientRect().top + window.scrollY - 16;
+      if (window.scrollY > top) window.scrollTo({ top: top, behavior: "smooth" });
+    }, 563);
+  }
+  // 입력 순서: 지금 기분 → 일정 → 원하는 분위기
+  function order() {
+    return ["page1", "page2", "page3"];
+  }
+  function nav(dir) {
+    var o = order(), cur = document.querySelector(".view.show");
+    var i = o.indexOf(cur && cur.id);
+    if (i !== -1 && o[i + dir]) go(o[i + dir]);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"), function (b) {
+    b.addEventListener("click", function () { nav(b.dataset.nav === "next" ? 1 : -1); });
+  });
+
+  // ---------- 배경: ① 시간대 하늘 ② 기분 오로라 ----------
+  var SKY = {
+    "아침": ["#1d1a33", "#3d2f55", "#8c5b6e", "#d48c6a"],
+    "점심": ["#0f2236", "#1f4466", "#3f7699", "#7fb0c8"],
+    "저녁": ["#1a1328", "#47264a", "#a3455a", "#ec8a4f"],
+    "밤":   ["#05070f", "#0a1128", "#141d40", "#1f2a52"]
+  };
+  var VEIL = { "맑음": "rgba(0,0,0,0)", "흐림": "rgba(38,42,52,.5)", "비": "rgba(10,16,28,.55)", "눈": "rgba(70,80,100,.3)" };
+  var skyTime = "점심";
+  function paintSky() {   // 새 하늘을 위에 겹쳐 서서히 나타나게 한 뒤, 이전 하늘은 치움
+    var c = SKY[skyTime] || SKY["점심"], v = VEIL[state.weather] || VEIL["맑음"];
+    var box = $("skyBg"), layer = el("div", "sky-layer");
+    layer.style.background = "linear-gradient(" + v + "," + v + "), linear-gradient(180deg," +
+      c[0] + " 0%," + c[1] + " 45%," + c[2] + " 80%," + c[3] + " 100%)";
+    box.appendChild(layer);
+    void layer.offsetWidth;
+    layer.style.opacity = 1;
+    setTimeout(function () { while (box.children.length > 1) box.removeChild(box.firstChild); }, 1400);
+  }
+  function setAura() {   // 지금 기분은 왼쪽 아래, 원하는 분위기는 오른쪽 위에서 번짐
+    [["a", state.mood], ["b", state.target]].forEach(function (x) {
+      var blob = document.querySelector("#aurora ." + x[0]), m = BGM.MOOD[x[1]];
+      if (!m) { blob.style.opacity = 0; return; }
+      blob.style.background = "radial-gradient(circle, " + m.colors[0] + " 0%, " + m.colors[1] + " 30%, transparent 66%)";
+      blob.style.opacity = .3;
+    });
+  }
+
+  // ---------- 시간대: 지금 시각으로 자동 (발표용으로 바꿀 수 있음) ----------
+  function setSlot(slot, manual) {
+    state.slot = slot;
+    var hr = new Date().getHours();
+    skyTime = !manual && slot === "저녁" && (hr >= 21 || hr < 5) ? "밤" : slot;   // 늦은 밤엔 별 하늘
+    Sky.setTime(skyTime); paintSky();
+    var wt = $("wxText").firstChild;   // 밤이 되면 날씨 아이콘도 바꿈
+    if (wt && wt.nodeType === 3 && BGM.WEATHER[state.weather]) wt.nodeValue = wxEmoji(state.weather) + " ";
+    $("tmText").innerHTML = "";
+    $("tmText").appendChild(document.createTextNode("🕐 "));
+    $("tmText").appendChild(el("b", null, slot));
+    $("tmSrc").textContent = manual ? "직접 선택" : "지금 시각 기준";
+    Array.prototype.forEach.call($("tmPick").children, function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.value === slot));
+    });
+    $("targetQ").textContent = slot === "저녁" ? "어떤 기분이고 싶나요?" : "저녁엔 어떤 기분이고 싶나요?";
+    $("targetSub").textContent = slot === "저녁" ? "오늘 밤, 잠들기 전에 도착하고 싶은 분위기를 골라 주세요."
+      : "하루의 마지막 장면, 도착하고 싶은 분위기를 골라 주세요.";
+    drawSched();
+  }
+  BGM.SLOTS.forEach(function (t) {
+    var b = el("button", null, BGM.SLOT_INFO[t].emoji + " " + t);
+    b.type = "button"; b.dataset.value = t;
+    b.addEventListener("click", function () { setSlot(t, true); $("tmPick").classList.remove("open"); });
+    $("tmPick").appendChild(b);
+  });
+  $("tmToggle").addEventListener("click", function () { $("tmPick").classList.toggle("open"); });
+
+  // 기분 이름은 카드와 같은 말로 (불안 → 불안한), 맑은 밤은 달 아이콘
+  function moodName(x) {
+    return String(x).split("→").map(function (id) { return (BGM.MOOD[id] && BGM.MOOD[id].label) || id; }).join(" → ");
+  }
+  function wxEmoji(w) { return w === "맑음" && skyTime === "밤" ? "🌙" : BGM.WEATHER[w].emoji; }
+
+  // ---------- 날씨: 현재 위치로 자동 ----------
+  var wxSource = "";
+  function setWeather(w, source, temp) {
+    state.weather = w;
+    if (source) wxSource = source;
+    document.body.dataset.weather = w;
+    Sky.set(w); paintSky();
+    $("wxText").innerHTML = "";
+    $("wxText").appendChild(document.createTextNode(wxEmoji(w) + " "));
+    $("wxText").appendChild(el("b", null, w));
+    if (temp != null) $("wxText").appendChild(document.createTextNode(" · " + Math.round(temp) + "°"));
+    $("wxSrc").textContent = { auto: "현재 위치", saved: "저장된 내 위치", ip: "접속 위치 기준", manual: "직접 선택", fallback: "날씨를 못 가져와 기본값" }[wxSource] || "";
+    Array.prototype.forEach.call($("wxPick").children, function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.value === w));
+    });
+  }
+  ["맑음", "흐림", "비", "눈"].forEach(function (w) {
+    var b = el("button", null, BGM.WEATHER[w].emoji + " " + w);
+    b.type = "button"; b.dataset.value = w;
+    b.addEventListener("click", function () { setWeather(w, "manual"); $("wxPick").classList.remove("open"); });
+    $("wxPick").appendChild(b);
+  });
+  var locBtn = el("button", null, "📍 내 위치 저장");   // 한 번만 허용하면 다음부터는 묻지 않음
+  locBtn.type = "button";
+  locBtn.addEventListener("click", function () { $("wxPick").classList.remove("open"); saveMyPosition(); });
+  $("wxPick").appendChild(locBtn);
+  $("wxToggle").addEventListener("click", function () { $("wxPick").classList.toggle("open"); });
+
+  // 시간 제한이 있는 JSON 요청
+  function getJSON(url, ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
+    return fetch(url, { signal: ctrl.signal }).then(function (r) {
+      if (!r.ok) throw new Error("응답 " + r.status);
+      return r.json();
+    }).finally(function () { clearTimeout(timer); });
+  }
+
+  // 위치: 켤 때는 묻지 않음 — ① 저장해 둔 내 위치 → ② 인터넷 접속 위치(대략) → ③ 기본값
+  //   (파일을 직접 여는 방식은 브라우저가 위치 허용을 기억하지 못해 매번 물어보기 때문)
+  var POS_KEY = "bgm-position-v1";
+  function savedPosition() {
+    try {
+      var p = JSON.parse(localStorage.getItem(POS_KEY));
+      if (p && typeof p.lat === "number") return { lat: p.lat, lon: p.lon, src: "saved" };
+    } catch (e) {}
+    return null;
+  }
+  function browserPosition() {
+    return new Promise(function (ok, no) {
+      if (!navigator.geolocation) return no(new Error("위치 기능 없음"));
+      navigator.geolocation.getCurrentPosition(function (p) {
+        ok({ lat: p.coords.latitude, lon: p.coords.longitude, src: "auto" });
+      }, function (e) {
+        no(new Error({ 1: "위치 권한 거부", 2: "위치 확인 불가", 3: "위치 응답 늦음" }[e.code] || "위치 오류"));
+      }, { timeout: 10000, maximumAge: 600000 });
+    });
+  }
+  function ipPosition() {
+    return getJSON("https://get.geojs.io/v1/ip/geo.json", 5000).then(function (d) {
+      if (!d.latitude || !d.longitude) throw new Error("접속 위치 없음");
+      return { lat: +d.latitude, lon: +d.longitude, src: "ip", place: [d.region, d.city].filter(Boolean).join(" ") };
+    });
+  }
+  function weatherAt(pos, force) {
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=" + pos.lat.toFixed(3) +
+      "&longitude=" + pos.lon.toFixed(3) + "&current=weather_code,temperature_2m&timezone=auto";
+    return getJSON(url, 6000).then(function (d) {
+      if (wxSource === "manual" && !force) return;   // 그 사이 직접 고른 날씨가 우선
+      setWeather(BGM.weatherFromCode(d.current.weather_code), pos.src, d.current.temperature_2m);
+      if (pos.place) $("wxSrc").textContent = pos.place + " (접속 위치 기준)";
+    });
+  }
+  function weatherFail(e, why) {
+    if (wxSource === "manual") return;
+    setWeather("맑음", "fallback");
+    $("wxSrc").textContent = "날씨를 못 가져와 기본값 · " + (why ? why + ", " : "") + (e.name === "AbortError" ? "응답 늦음" : e.message);
+  }
+
+  function autoWeather() {
+    setWeather("맑음");
+    $("wxText").textContent = "📍 날씨 확인 중…";
+    var saved = savedPosition();
+    (saved ? Promise.resolve(saved) : ipPosition()).then(weatherAt).catch(function (e) { weatherFail(e); });
+  }
+
+  // [📍 내 위치 저장]: 이때 한 번만 위치를 물어보고 저장
+  function saveMyPosition() {
+    $("wxText").textContent = "📍 내 위치 확인 중… (허용을 눌러 주세요)";
+    browserPosition().then(function (pos) {
+      try { localStorage.setItem(POS_KEY, JSON.stringify({ lat: +pos.lat.toFixed(3), lon: +pos.lon.toFixed(3) })); } catch (e) {}
+      pos.src = "saved";
+      return weatherAt(pos, true);
+    }).catch(function (e) {
+      // 위치를 못 받으면 원래 방식으로 되돌림
+      autoWeather();
+      alert("내 위치를 가져오지 못했어요 (" + e.message + "). 접속 위치 기준 날씨를 계속 사용합니다.");
+    });
+  }
+
+  // ---------- 프롤로그: "오늘 하루, 당신이 영화의 주인공" ----------
+  var introTimers = [], tcTimer = null;
+  function playPrologue() {
+    introTimers.forEach(clearTimeout); introTimers = []; clearInterval(tcTimer);   // 다시 보기: 이전 진행은 정리
+    var GREET = {
+      "아침": { "비": "비 내리는 아침,", "눈": "눈 내리는 아침,", "흐림": "구름 낀 아침,", "맑음": "햇살 좋은 아침," },
+      "점심": { "비": "빗소리 섞인 한낮,", "눈": "눈 내리는 한낮,", "흐림": "구름 낀 한낮,", "맑음": "햇살 가득한 한낮," },
+      "저녁": { "비": "비 내리는 저녁,", "눈": "눈 내리는 저녁,", "흐림": "구름 낀 저녁,", "맑음": skyTime === "밤" ? "별이 뜬 밤," : "노을 지는 저녁," }
+    };
+    var lines = [
+      { t: function () { return (GREET[state.slot] || GREET["점심"])[state.weather] || "오늘도,"; }, sub: "오늘도 하루가 흘러갑니다." },   // 띄우는 순간의 날씨로
+      { t: "회의와 보고, 마감 사이 —", sub: "하루는 늘 비슷하게 지나가지만" },
+      { t: "오늘만큼은,", sub: "" },
+      { t: "당신이 이 영화의 주인공입니다.", sub: "오늘의 장면에 어울리는 BGM을 찾아 드릴게요.", hero: true }
+    ];
+    document.body.classList.add("cinema", "prologue-mode");
+    var start = Date.now();
+    tcTimer = setInterval(function () {   // 녹화 시간 표시 (분:초:프레임)
+      var ms = Date.now() - start, f = Math.floor(ms / 1000 * 24) % 24, sec = Math.floor(ms / 1000);
+      $("tc").textContent = "00:" + String(sec).padStart(2, "0") + ":" + String(f).padStart(2, "0");
+    }, 42);
+    var at = 1625;   // 날씨를 받아 올 시간을 조금 줌
+    lines.forEach(function (ln, i) {
+      introTimers.push(setTimeout(function () {
+        var L = $("proLine"), S = $("proSub");
+        L.classList.remove("on"); S.classList.remove("on");
+        introTimers.push(setTimeout(function () {
+          L.textContent = typeof ln.t === "function" ? ln.t() : ln.t; L.classList.toggle("hero", !!ln.hero);
+          S.textContent = ln.sub;
+          L.classList.add("on"); if (ln.sub) S.classList.add("on");
+        }, i ? 625 : 0));
+      }, at));
+      at += ln.hero ? 4000 : 2625;
+    });
+    introTimers.push(setTimeout(endPrologue, at + 375));
+  }
+  function endPrologue() {
+    introTimers.forEach(clearTimeout); introTimers = [];
+    clearInterval(tcTimer);
+    document.body.classList.remove("cinema", "prologue-mode");
+    $("moodGrid").classList.add("stagger");
+    go("page1");
+    setTimeout(function () { $("moodGrid").classList.remove("stagger"); }, 2000);
+  }
+  $("introSkip").addEventListener("click", endPrologue);
+
+  // [↻ 프롤로그]: 지금 고른 시간대·날씨로 처음부터 다시 보기
+  $("replayBtn").addEventListener("click", function () {
+    runId++;
+    clearOpening(); stopTyping(); stopMusic();
+    var L = $("proLine"), S = $("proSub");
+    L.className = "pro-line"; S.className = "pro-sub"; L.textContent = ""; S.textContent = "";
+    $("tc").textContent = "00:00:00";
+    go("intro");
+    Theme.start();
+    playPrologue();
+  });
+
+  // ---------- 1·3페이지: 기분 카드 ----------
+  function makeMoodCards(gridId, key, sub) {
+    BGM.MOODS.forEach(function (m) {
+      var b = el("button", "mood-card " + inkFor(m.colors));
+      b.type = "button"; b.dataset.value = m.id; b.setAttribute("aria-pressed", "false");
+      b.style.background = "linear-gradient(150deg," + m.colors[0] + "," + m.colors[1] + ")";
+      b.appendChild(el("span", "emo", m.emoji));
+      b.appendChild(el("span", "name", m.label || m.id));
+      b.appendChild(el("span", "desc", m[sub]));
+      b.style.animationDelay = (BGM.MOODS.indexOf(m) * 0.09) + "s";   // 프롤로그 뒤 하나씩 떠오름
+      b.addEventListener("click", function () {
+        if (key === "mood") { if (faceStream) faceFreeze(); else faceStop(); }   // 켜진 카메라는 화면 전환 뒤 go() 가 정리
+        pick(gridId, key, m.id);
+        if (key === "mood") setTimeout(function () { nav(1); }, 350);   // 고르면 다음 페이지로
+        if (key === "target") startPrefetch();                           // 원하는 분위기를 고르면 문구 미리 요청
+      });
+      $(gridId).appendChild(b);
+    });
+  }
+  function pick(gridId, key, value) {
+    state[key] = value;
+    Array.prototype.forEach.call($(gridId).children, function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.value === value));
+    });
+    $("makeBtn").disabled = !(state.mood && state.target);
+    setAura();
+  }
+  makeMoodCards("moodGrid", "mood", "feel");
+  makeMoodCards("targetGrid", "target", "wish");
+
+  // ---------- 1페이지: 표정으로 기분 읽기 (실시간, 이 컴퓨터 안에서만) ----------
+  //   얼굴 찾기 + 표정 모델(face-api)이 0.2초마다 7가지 표정 확률을 주면 → 우리 7가지 기분 % 로 바꿔 막대로 보여 줌
+  //   여러 명이 보이면 BGM.pickMainFace 규칙으로 "나" 한 명만 읽음 (노란 상자 = 나, 회색 = 다른 사람)
+  var faceStream = null, faceRun = 0, faceTimer = null, faceReady = null;
+  var faceMain = null, faceSmooth = null, faceTop = null;
+  function faceMsg(text) { $("faceMsg").textContent = text; }
+
+  // 모델은 lib/face-models.js 에 담아 둠 (file:// 로 열어도 인터넷 없이 읽힘) — 처음 한 번만 준비
+  function loadFaceModels() {
+    if (faceReady) return faceReady;
+    faceReady = new Promise(function (ok, no) {
+      if (!window.faceapi || !window.FACE_MODELS) { no(new Error("표정 모델 파일(lib/face-api.js, lib/face-models.js)이 없음")); return; }
+      var tf = faceapi.tf;
+      function load(net, m) {
+        var bin = atob(m.bin), buf = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        var loader = tf.io.weightsLoaderFactory(function () { return Promise.resolve([buf.buffer]); });
+        return loader(m.manifest, "").then(function (map) { net.loadFromWeightMap(map); });
+      }
+      tf.ready().then(function () {
+        return Promise.all([load(faceapi.nets.tinyFaceDetector, FACE_MODELS.tiny), load(faceapi.nets.faceExpressionNet, FACE_MODELS.expr)]);
+      }).then(ok, no);
+    });
+    faceReady.catch(function () { faceReady = null; });
+    return faceReady;
+  }
+
+  // 읽기를 멈추고 마지막 장면에서 정지 (상자·막대는 그대로 보임)
+  function faceFreeze() {
+    faceRun++;
+    clearTimeout(faceTimer);
+    $("faceVideo").pause();
+    $("faceUse").disabled = true; $("faceCancel").disabled = true;
+  }
+  function faceStop() {
+    faceRun++;
+    $("faceCancel").disabled = false;
+    clearTimeout(faceTimer);
+    if (faceStream) { faceStream.getTracks().forEach(function (t) { t.stop(); }); faceStream = null; }
+    $("faceVideo").srcObject = null;
+    $("faceLive").hidden = true; $("faceActions").hidden = true; $("faceStart").hidden = false;
+  }
+
+  // 막대 7줄 (기분 카드와 같은 순서·색)
+  BGM.MOODS.forEach(function (m) {
+    var row = el("div", "fb-row"); row.dataset.id = m.id;
+    row.appendChild(el("span", "fb-name", m.emoji + " " + m.id));
+    var track = el("div", "fb-track"), fill = el("div", "fb-fill");
+    fill.style.background = "linear-gradient(90deg," + m.colors[0] + "," + m.colors[1] + ")";
+    track.appendChild(fill); row.appendChild(track);
+    row.appendChild(el("span", "fb-pct", "–"));
+    $("faceBars").appendChild(row);
+  });
+  // 막대 길이는 1위 기준 (1위 = 가득) — 47%·20% 처럼 낮아도 비어 보이지 않게, 숫자는 실제 % 그대로
+  function drawBars(pcts) {
+    var top = pcts ? BGM.topMood(pcts) : null;
+    var max = pcts ? Math.max.apply(null, pcts.map(function (r) { return r.pct; })) : 0;
+    Array.prototype.forEach.call($("faceBars").children, function (row, i) {
+      var p = pcts ? pcts[i].pct : 0;
+      row.querySelector(".fb-fill").style.width = (max ? p / max * 100 : 0) + "%";
+      row.querySelector(".fb-pct").textContent = pcts ? p + "%" : "–";
+      row.classList.toggle("top", row.dataset.id === top);
+    });
+    faceTop = top;
+    var b = $("faceUse");
+    b.disabled = !top;
+    b.textContent = top ? BGM.MOOD[top].emoji + " '" + (BGM.MOOD[top].label || top) + "'으로 정하기 (" + pcts.filter(function (r) { return r.id === top; })[0].pct + "%)" : "얼굴을 찾는 중…";
+  }
+
+  // 얼굴 상자: 나 = 노란색, 다른 사람 = 회색
+  function drawBoxes(faces, main) {
+    var v = $("faceVideo"), cv = $("faceBoxes");
+    cv.width = v.videoWidth || 640; cv.height = v.videoHeight || 480;
+    var g = cv.getContext("2d");
+    g.clearRect(0, 0, cv.width, cv.height);
+    faces.forEach(function (f, i) {
+      g.lineWidth = i === main ? 4 : 2;
+      g.strokeStyle = i === main ? "#f2c14e" : "rgba(255,255,255,.45)";
+      g.strokeRect(f.x, f.y, f.w, f.h);
+    });
+  }
+
+  function faceLoop(my) {
+    if (my !== faceRun) return;
+    var v = $("faceVideo");
+    var next = function () { if (my === faceRun) faceTimer = setTimeout(function () { faceLoop(my); }, 200); };
+    if (!v.videoWidth) { next(); return; }
+    faceapi.detectAllFaces(v, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+      .withFaceExpressions().then(function (list) {
+        if (my !== faceRun) return;
+        var faces = list.map(function (d) { var b = d.detection.box; return { x: b.x, y: b.y, w: b.width, h: b.height }; });
+        var main = BGM.pickMainFace(faces, faceMain, v.videoWidth, v.videoHeight);
+        drawBoxes(faces, main);
+        if (main === -1) {
+          faceMain = null; faceSmooth = null; drawBars(null);
+          faceMsg("얼굴이 보이지 않아요. 카메라 정면을 봐 주세요.");
+        } else {
+          faceMain = faces[main];
+          // 표정 확률을 부드럽게 (한 장면에 출렁이지 않도록 직전 값 70% + 새 값 30%)
+          var e = list[main].expressions, s = {};
+          Object.keys(BGM.EXPR_TO_MOOD).forEach(function (k) {
+            var x = Number(e[k]) || 0;
+            s[k] = faceSmooth ? faceSmooth[k] * 0.7 + x * 0.3 : x;
+          });
+          faceSmooth = s;
+          drawBars(BGM.moodPercents(s));
+          faceMsg(faces.length > 1
+            ? "👥 " + faces.length + "명이 보여요 — 가장 가까운 노란 상자 1명의 표정만 읽어요"
+            : "실시간으로 표정을 읽는 중이에요. 마음에 들면 아래 버튼을 눌러 주세요.");
+        }
+      }).catch(function () {}).then(next);
+  }
+
+  $("faceStart").addEventListener("click", function () {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { faceMsg("이 브라우저에서는 카메라를 쓸 수 없어요. 아래에서 직접 골라 주세요."); return; }
+    faceStop();
+    var my = faceRun;
+    faceMain = null; faceSmooth = null; drawBars(null);
+    faceMsg("카메라를 켜고 표정 모델을 준비하는 중…");
+    var cam = null;   // 모델이 실패해도 켜진 카메라는 꼭 끄도록 붙잡아 둠
+    Promise.all([openCamera().then(function (s) { cam = s; return s; }), loadFaceModels()]).then(function (r) {
+      var s = r[0];
+      if (my !== faceRun) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+      faceStream = s;
+      $("faceVideo").srcObject = s;
+      $("faceStart").hidden = true; $("faceLive").hidden = false; $("faceActions").hidden = false;
+      faceLoop(my);
+    }, function (e) {
+      if (cam && cam !== faceStream) cam.getTracks().forEach(function (t) { t.stop(); });
+      if (my !== faceRun) return;
+      faceMsg(e && e.name ? cameraError(e) : "표정 모델을 불러오지 못했어요 (" + (e && e.message) + "). 아래에서 직접 골라 주세요.");
+    });
+  });
+  $("faceCancel").addEventListener("click", function () { faceStop(); faceMsg("아래에서 직접 골라 주세요."); });
+  $("faceUse").addEventListener("click", function () {
+    if (!faceTop) return;
+    var id = faceTop;
+    pick("moodGrid", "mood", id);
+    faceMsg(BGM.MOOD[id].emoji + " 표정으로 '" + (BGM.MOOD[id].label || id) + "' 기분을 골랐어요.");
+    nav(1);   // 바로 다음 단계로 — 카메라는 화면 전환이 끝난 뒤 go() 가 정리
+  });
+
+  // 실제 카메라를 우선 (이름에 Virtual 이 들어간 가상 카메라는 피함)
+  function openCamera() {
+    var base = { width: { ideal: 640 } };
+    return navigator.mediaDevices.getUserMedia({ video: base, audio: false }).then(function (s) {
+      var label = (s.getVideoTracks()[0] || {}).label || "";
+      if (!/virtual/i.test(label)) return s;
+      return navigator.mediaDevices.enumerateDevices().then(function (list) {
+        var real = list.filter(function (d) { return d.kind === "videoinput" && d.label && !/virtual/i.test(d.label); })[0];
+        if (!real) return s;
+        s.getTracks().forEach(function (t) { t.stop(); });
+        return navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: real.deviceId }, width: { ideal: 640 } }, audio: false });
+      });
+    });
+  }
+  function cameraError(e) {
+    var n = e && e.name;
+    if (n === "NotAllowedError" || n === "SecurityError")
+      return "🚫 카메라가 차단돼 있어요. 주소창 오른쪽의 카메라 아이콘(❌)을 눌러 '항상 허용'으로 바꾼 뒤 새로고침(F5)해 주세요.";
+    if (n === "NotReadableError" || n === "AbortError")
+      return "📷 다른 프로그램(Teams·Zoom 등)이 카메라를 쓰고 있어요. 그 프로그램을 닫고 다시 눌러 주세요.";
+    if (n === "NotFoundError" || n === "OverconstrainedError")
+      return "📷 연결된 카메라를 찾지 못했어요. 아래에서 직접 골라 주세요.";
+    return "카메라를 켤 수 없어요 (" + (n || "알 수 없는 오류") + "). 아래에서 직접 골라 주세요.";
+  }
+
+  // ---------- 2페이지: 일정 카드 (여러 개 선택) ----------
+  var SCHED = [
+    ["회의", "💬"], ["보고", "📊"], ["발표", "🎤"], ["마감", "⏰"], ["야근", "🌃"],
+    ["미팅", "🤝"], ["외근", "🚗"], ["운동", "🏃"], ["휴가", "🏖️"], ["휴식", "☕"]
+  ];
+  var SCORE = {};
+  BGM.KEYWORDS.forEach(function (k) { SCORE[k[0]] = k[1]; });
+  SCHED.forEach(function (s) {
+    var b = el("button", "sched-card");
+    b.type = "button"; b.dataset.value = s[0]; b.setAttribute("aria-pressed", "false");
+    b.appendChild(el("span", "emo", s[1]));
+    b.appendChild(el("span", "name", s[0]));
+    var sc = SCORE[s[0]];
+    b.appendChild(el("span", "lv", sc >= 2 ? "바쁨 ●●" : sc === 1 ? "보통 ●" : "쉼 ○"));
+    b.addEventListener("click", function () {
+      var i = state.sched.indexOf(s[0]);
+      if (i === -1) state.sched.push(s[0]); else state.sched.splice(i, 1);
+      drawSched();
+    });
+    $("schedGrid").appendChild(b);
+  });
+  var none = el("button", "sched-card none");
+  none.type = "button"; none.dataset.value = "";
+  none.appendChild(el("span", "emo", "🍃"));
+  none.appendChild(el("span", "name", "특별한 일정 없음"));
+  none.addEventListener("click", function () { state.sched = []; drawSched(); });
+  $("schedGrid").appendChild(none);
+
+  function scheduleText() { return state.sched.join(", "); }
+  function drawSched() {
+    Array.prototype.forEach.call($("schedGrid").children, function (b) {
+      var on = b.dataset.value ? state.sched.indexOf(b.dataset.value) !== -1 : !state.sched.length;
+      b.setAttribute("aria-pressed", String(on));
+    });
+    var s = BGM.scoreSchedule(scheduleText());
+    var m = $("meter"); m.innerHTML = ""; m.dataset.level = s.level;
+    m.appendChild(el("span", "m-label", "오늘의 강도"));
+    m.appendChild(el("span", "m-level", s.level + " · " + String(s.score).replace("-", "−") + "점"));
+    m.appendChild(el("span", "m-note", state.slot === "아침"
+      ? (s.adjust > 0 ? "점심 BGM 템포 +10" : s.adjust < 0 ? "점심 BGM 템포 −10" : "템포는 그대로")
+      : (s.level === "빡빡" ? "마지막 BGM은 회복용으로" : "흐름은 그대로")));
+  }
+
+  // ---------- 결과 그리기 ----------
+  function render(rec) {
+    $("movieTitle").textContent = rec.movieTitle;
+    $("movieCopy").textContent = "“" + rec.copy + "”";
+
+    var flow = $("flow"); flow.innerHTML = "";
+    var s = rec.sched;
+    var f0 = el("span"); f0.appendChild(el("b", null, wxEmoji(rec.input.weather) + " " + rec.input.weather));
+    var fp = el("span", null, BGM.SLOT_INFO[rec.slot].emoji + " " + rec.slot + "에 켬");
+    var f1 = el("span"); f1.appendChild(el("b", null, "지금 " + (rec.keep ? moodName(rec.from) + " 유지형" : moodName(rec.from) + " → " + moodName(rec.to))));
+    var f2 = el("span"); f2.appendChild(el("b", null, rec.cards.map(function (c) { return c.bpm; }).join(" → ") + " BPM"));
+    var detail = s.hits.length
+      ? s.hits.map(function (h) { return h.word + (h.score > 0 ? " +" : " ") + h.score; }).join(", ") + " = " + s.score + "점"
+      : "키워드 없음";
+    var f3 = el("span", null, "일정 " + detail + " → ");
+    var sign = function (n) { return (n > 0 ? "+" : "") + n; };
+    if (rec.lunch) {
+      f3.appendChild(el("b", null, s.level + (s.adjust ? " (점심 " + sign(s.adjust) + ")" : "")));
+      if (rec.lunch.capped) f3.appendChild(document.createTextNode(" · 흐름을 넘지 않게 " + sign(rec.lunch.shift) + "까지만"));
+    } else {
+      f3.appendChild(el("b", null, s.level + (s.level === "빡빡" ? " (마지막 장면은 회복용)" : "")));
+    }
+    [f0, fp, f1, f2, f3].forEach(function (f) { flow.appendChild(f); });
+
+    var box = $("cards"); box.innerHTML = ""; box.className = "cards n" + rec.cards.length;
+    rec.cards.forEach(function (c, i) {
+      if (i > 0) box.appendChild(el("div", "arrow", "→"));
+      var card = el("article", "card " + c.kind + " " + inkFor(c.colors) + (i === selectedIdx ? " selected" : ""));
+      card.addEventListener("click", function () { selectCard(i); });
+      card.style.background = "linear-gradient(160deg," + c.colors[0] + " 0%," + c.colors[1] + " 100%)";
+      card.style.setProperty("--beat", (60 / c.bpm).toFixed(3) + "s");   // 재생 중 BPM에 맞춰 두근거림
+      card.appendChild(el("div", "slot", c.slot));
+      card.appendChild(el("div", "scene", c.scene));
+      card.appendChild(el("div", "mod", c.mod));
+      card.appendChild(el("div", "genre", c.genre));
+      var bpm = el("div", "bpm", String(c.bpm)); bpm.appendChild(el("small", null, "BPM"));
+      card.appendChild(bpm);
+      var bar = el("div", "tempo"), fill = el("i");
+      fill.style.width = Math.max(5, Math.min(100, (c.bpm - 50) / (140 - 50) * 100)) + "%";
+      bar.appendChild(fill); card.appendChild(bar);
+      var ul = el("ul", "lines");
+      c.lines.forEach(function (l) { ul.appendChild(el("li", null, l)); });
+      card.appendChild(ul);
+      var tags = el("div", "tags");
+      c.colors.forEach(function (col) { var sw = el("span", "sw"); sw.style.background = col; tags.appendChild(sw); });
+      tags.appendChild(el("span", null, moodName(c.mood)));
+      var pb = el("button", "play", "▶ 들어 보기");
+      pb.type = "button";
+      pb.addEventListener("click", function (ev) { ev.stopPropagation(); toggleCard(i); });
+      tags.appendChild(pb);
+      card.appendChild(tags);
+      box.appendChild(card);
+    });
+    markPlaying(playingIdx);
+  }
+
+  // ---------- 감성 문구: Claude 또는 OpenAI (bgm.config.js 에 키를 넣은 쪽을 씀) ----------
+  function getConfig() {
+    var c = window.BGM_CONFIG || {};
+    var claudeKey = (c.apiKey || "").trim(), openaiKey = (c.openaiKey || "").trim();
+    var provider = c.provider || (openaiKey && !claudeKey ? "openai" : "claude");
+    var timeoutMs = c.timeoutMs || 15000;
+    return provider === "openai"
+      ? { provider: "openai", name: "OpenAI", key: openaiKey, model: c.openaiModel || "gpt-6-luna", timeoutMs: timeoutMs }
+      : { provider: "claude", name: "Claude", key: claudeKey, model: c.model || "claude-sonnet-5-5", timeoutMs: timeoutMs };
+  }
+
+  // 응답이 실패면 이유를 짧게 담아 오류로
+  function readJSON(r) {
+    if (r.ok) return r.json();
+    return r.json().catch(function () { return {}; }).then(function (e) {
+      var msg = e && e.error && e.error.message ? " · " + String(e.error.message).slice(0, 80) : "";
+      throw new Error("응답 오류 " + r.status + msg);
+    });
+  }
+
+  // 회사별 호출 방식만 다르고, 받는 것은 똑같이 '문구 JSON 이 담긴 글'
+  function callLLM(cfg, p, signal) {
+    if (cfg.provider === "openai") {
+      return fetch("https://api.openai.com/v1/responses", {
+        method: "POST", signal: signal,
+        headers: { "content-type": "application/json", "authorization": "Bearer " + cfg.key },
+        body: JSON.stringify({ model: cfg.model, instructions: p.system, input: p.user, max_output_tokens: 4000 })
+      }).then(readJSON).then(function (d) {
+        if (typeof d.output_text === "string") return d.output_text;
+        return (d.output || []).map(function (o) {
+          return (o.content || []).filter(function (c) { return c.type === "output_text"; })
+            .map(function (c) { return c.text; }).join("");
+        }).join("");
+      });
+    }
+    return fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": cfg.key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({ model: cfg.model, max_tokens: 1000, system: p.system, messages: [{ role: "user", content: p.user }] })
+    }).then(readJSON).then(function (d) {
+      return (d.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("");
+    });
+  }
+
+  var prefetch = null;   // { key, promise, failed } — 같은 입력이면 이미 보낸 요청을 그대로 씀
+  function currentInput() {
+    return { mood: state.mood, weather: state.weather, target: state.target, schedule: scheduleText(), slot: state.slot };
+  }
+  function requestText(inp) {
+    var key = JSON.stringify([inp.mood, inp.weather, inp.target, inp.schedule, inp.slot]);
+    if (prefetch && prefetch.key === key && !prefetch.failed) return prefetch.promise;
+    var cfg = getConfig(), entry = { key: key, failed: false };
+    if (!cfg.key) {
+      var err = new Error("API 키가 설정되지 않음"); err.noKey = true;
+      entry.promise = Promise.reject(err);
+    } else {
+      var rec = BGM.recommend(inp), ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, cfg.timeoutMs);
+      entry.promise = callLLM(cfg, BGM.buildPrompt(rec), ctrl.signal).then(function (text) {
+        var t = BGM.parseLLM(text, rec.cards.length);
+        if (!t) throw new Error("형식이 맞지 않음");
+        return { t: t, cfg: cfg };
+      }).finally(function () { clearTimeout(timer); });
+    }
+    entry.promise.catch(function () { entry.failed = true; });
+    prefetch = entry;
+    return entry.promise;
+  }
+  // 3페이지에서 원하는 분위기를 고르는 순간 미리 요청 (버튼 누를 때까지의 시간을 벎)
+  function startPrefetch() {
+    if (state.mood && state.target && getConfig().key) requestText(currentInput());
+  }
+  function textStatus(r) {
+    if (r && r.t) return "✨ " + r.cfg.name + "가 쓴 문구 (" + r.cfg.model + ")";
+    if (r && r.noKey) return "📝 예시 문구 (API 키가 설정되지 않음)";
+    return "📝 예시 문구 (" + getConfig().name + " 연결 실패: " + (r && r.name === "AbortError" ? "응답이 늦음" : r && r.message) + ")";
+  }
+
+  // ---------- 문구가 써지는 효과 ----------
+  var typeTimers = [];
+  function stopTyping() {
+    typeTimers.forEach(clearInterval); typeTimers = [];
+    Array.prototype.forEach.call(document.querySelectorAll(".typing"), function (e) { e.classList.remove("typing"); });
+  }
+  function typeOut() {
+    stopTyping();
+    var targets = [$("movieTitle"), $("movieCopy")].concat(
+      Array.prototype.slice.call(document.querySelectorAll("#cards .scene, #cards .lines li")));
+    targets.forEach(function (e) {
+      var full = e.textContent, i = 0;
+      e.textContent = ""; e.classList.add("typing");
+      var t = setInterval(function () {
+        i += 1; e.textContent = full.slice(0, i);
+        if (i >= full.length) { clearInterval(t); e.classList.remove("typing"); }
+      }, 28);
+      typeTimers.push(t);
+    });
+  }
+
+  // ---------- 영화 오프닝: 카운트다운 → 장면 촬영 → 개봉 ----------
+  var opTimer = null, opSteps = [];
+  function clearOpening() { clearInterval(opTimer); opSteps.forEach(clearTimeout); opSteps = []; }
+  function playOpening(rec, my, textP) {
+    clearOpening();
+    var list = $("opScenes"); list.innerHTML = "";
+    rec.cards.forEach(function (c) {
+      var li = el("li"); li.appendChild(el("span", null, "🎬 " + c.scene)); li.appendChild(el("span", "st", "촬영 대기"));
+      list.appendChild(li);
+    });
+    $("opTitle").textContent = "오늘의 영화를 촬영하는 중…";
+    $("opMusic").textContent = "";
+    $("count").textContent = "3";
+    document.body.classList.add("cinema");   // 오프닝 동안 위아래 레터박스
+    go("opening");
+
+    Theme.duck();        // 오프닝 테마는 작게
+    Music.beep(false);   // 3 — 뚜
+    $("opMusic").textContent = "🎞️ 필름 카운트다운";
+
+    // 카운트다운은 천천히(숫자당 1.12초), 장면 촬영은 0.7초 간격
+    var arrived = null, CD = 1120, k = -1, items = list.children;
+    textP.then(function (r) { arrived = r; }, function (e) { arrived = e; });
+    function sceneTick() {
+      if (my !== runId) { clearOpening(); return; }
+      k++;
+      if (k < items.length) {   // 장면을 하나씩 촬영
+        if (k > 0) { items[k - 1].className = "done"; items[k - 1].lastChild.textContent = "✓ 촬영 완료"; }
+        items[k].className = "doing"; items[k].lastChild.textContent = "촬영 중…";
+        return;
+      }
+      if (k === items.length) { var last = items[k - 1]; last.className = "done"; last.lastChild.textContent = "✓ 촬영 완료"; }
+      if (arrived === null) { $("opTitle").textContent = "AI가 대사를 다듬는 중…"; return; }
+      clearOpening();
+      $("opTitle").textContent = "개봉 박두!";
+      opSteps.push(setTimeout(function () { if (my === runId) reveal(rec, my, arrived, textP); }, 600));
+    }
+    opSteps.push(setTimeout(function () { $("count").textContent = "2"; Music.beep(false); }, CD));       // 뚜
+    opSteps.push(setTimeout(function () { $("count").textContent = "1"; Music.beep(false); }, CD * 2));   // 뚜
+    opSteps.push(setTimeout(function () {                                                                // ▶ 띠, 영사기
+      $("count").textContent = "▶";
+      Music.beep(true); Music.projector(true); Theme.stop();   // "띠"에서 테마는 사라짐
+      $("opMusic").textContent = "📽️ 영사기 돌아가는 중…";
+      sceneTick();
+      opTimer = setInterval(sceneTick, 700);
+    }, CD * 3));
+  }
+
+  function reveal(rec, my, r, textP) {
+    clearOpening();
+    if (r && r.t) { BGM.applyText(rec, r.t); render(rec); }
+    $("status").textContent = r ? textStatus(r) : "✨ " + getConfig().name + "가 문구를 쓰는 중…";
+    Music.projector(false); Theme.stop();
+    startCard(0, { loop: true });   // 개봉과 함께 첫 장면 BGM 시작
+    document.body.classList.remove("cinema");
+    go("result");
+    setTimeout(function () { if (my === runId) typeOut(); }, 600);
+    if (!r) {   // 바로 보기로 건너뛴 경우: 문구가 나중에 오면 그 자리에서 써짐
+      textP.then(function (late) {
+        if (my !== runId) return;
+        BGM.applyText(rec, late.t); render(rec); typeOut();
+        $("status").textContent = textStatus(late);
+      }, function (e) { if (my === runId) $("status").textContent = textStatus(e); });
+    }
+  }
+
+  // ---------- 오프닝 테마 (bgm/theme.mp3): 고르는 동안 흐르고, 카운트다운에서 작아졌다가 "띠"에서 사라짐 ----------
+  var Theme = (function () {
+    var a = null, timer = null, VOL = 0.35;
+    function fadeTo(to, ms, done) {
+      clearInterval(timer);
+      var from = a.volume, t0 = Date.now();
+      timer = setInterval(function () {
+        if (!a) { clearInterval(timer); return; }
+        var k = Math.min(1, (Date.now() - t0) / ms);
+        a.volume = from + (to - from) * k;
+        if (k === 1) { clearInterval(timer); if (done) done(); }
+      }, 30);
+    }
+    function start() {
+      if (!a) {
+        a = new Audio("bgm/theme.mp3"); a.loop = true; a.volume = 0;
+        a.onerror = function () { a = null; };   // 곡이 없으면 조용히 넘어감
+      }
+      var pr = a.paused ? a.play() : null;
+      fadeTo(VOL, 1500);
+      return pr && pr.then ? pr.then(function () { return true; }, function () { return false; }) : Promise.resolve(true);
+    }
+    function duck() { if (a && !a.paused) fadeTo(0.1, 600); }
+    function stop() {
+      if (a && !a.paused) { var x = a; fadeTo(0, 900, function () { x.pause(); x.currentTime = 0; }); }
+    }
+    return { start: start, duck: duck, stop: stop };
+  })();
+  // 브라우저는 화면을 한 번 눌러야 소리를 낼 수 있어서, 처음 누르는 순간 테마를 시작
+  function firstTouch() {
+    document.removeEventListener("pointerdown", firstTouch, true);
+    document.removeEventListener("keydown", firstTouch, true);
+    var v = document.querySelector(".view.show");
+    if (v && ["intro", "page1", "page2", "page3"].indexOf(v.id) !== -1) Theme.start();
+  }
+  document.addEventListener("pointerdown", firstTouch, true);
+  document.addEventListener("keydown", firstTouch, true);
+  // 화면이 열리는 순간 바로 틀어 봄 (브라우저가 자동 재생을 허용하면 그대로 흐름)
+  Theme.start().then(function (ok) {
+    if (ok) return;
+    $("proHint").hidden = false;   // 막혔으면: 누르면 시작한다고 안내
+    document.addEventListener("pointerdown", function () { $("proHint").hidden = true; }, { once: true, capture: true });
+  });
+
+  // ---------- BGM 듣기: 카드 하나씩, 또는 하루 전체 이어서 ----------
+  // 기본은 Tone.js 연주, [💎 모드]를 켜면 준비한 곡을 그대로 재생 (발표용)
+  var PREMIUM_KEY = "bgm-premium-v1", premium = false;
+  try { premium = localStorage.getItem(PREMIUM_KEY) === "1"; } catch (e) {}
+  var playingIdx = -1, seqOn = false, selectedIdx = 0;
+  // 장면 선택: 흰 테두리를 옮기고, 음악을 듣는 중이면 그 장면 BGM 으로 바꿈
+  function selectCard(i) {
+    selectedIdx = i;
+    Array.prototype.forEach.call(document.querySelectorAll("#cards .card"), function (k, j) { k.classList.toggle("selected", j === i); });
+    if (playingIdx !== -1 && !seqOn && playingIdx !== i) startCard(i, { loop: true });
+  }
+  function markPlaying(i) {
+    if (i >= 0 && i !== selectedIdx) {   // 재생 중인 장면으로 테두리도 따라감
+      selectedIdx = i;
+      Array.prototype.forEach.call(document.querySelectorAll("#cards .card"), function (k, j) { k.classList.toggle("selected", j === i); });
+    }
+    playingIdx = i;
+    Array.prototype.forEach.call(document.querySelectorAll("#cards .card"), function (k, j) {
+      k.classList.toggle("playing", j === i);
+      var b = k.querySelector(".play");
+      if (b) b.textContent = j === i ? "■ 멈추기" : "▶ 들어 보기";
+    });
+    $("playAllBtn").textContent = seqOn ? "■ 멈추기" : "▶ 하루 전체 듣기";
+  }
+  function stopMusic() { Music.stop(); Player.stop(); Music.projector(false); seqOn = false; markPlaying(-1); }
+  function nowPlaying(c, t) {
+    $("toast").textContent = t
+      ? "💎 " + c.time + " · " + moodName(t.mood) + " BGM — 「" + t.title + "」 재생 중"
+      : "🎹 " + c.time + " · " + c.mod + " " + c.genre + " · " + c.bpm + " BPM · 오늘의 편곡 " +
+        "ABC"[Music.specOf(c, current.input.weather).variant] + " 연주 중";
+  }
+  function musicMissing(src) {
+    var idx = playingIdx;
+    seqOn = false; markPlaying(-1);
+    $("toast").textContent = "⚠️ 💎 모드 곡 파일(" + src + ")이 없어요. bgm 폴더의 '곡_넣는_방법.txt'를 확인해 주세요.";
+    var b = document.querySelectorAll("#cards .play")[idx];   // 누른 카드 버튼에도 바로 표시
+    if (b) { b.textContent = "⚠️ 곡 파일 없음"; setTimeout(function () { if (playingIdx !== idx) b.textContent = "▶ 들어 보기"; }, 2500); }
+  }
+  function musicFail() {
+    seqOn = false; markPlaying(-1);
+    $("toast").textContent = "⚠️ 음악 엔진(Tone.js)을 불러오지 못했어요. lib 폴더에 Tone.js 가 있는지 확인해 주세요.";
+  }
+  function startCard(i, opt) {
+    var c = current.cards[i];
+    if (premium) {
+      nowPlaying(c, Player.play(c, { loop: opt.loop, seconds: opt.loop ? 0 : 30, onend: opt.onend, onerror: musicMissing }));
+    } else {
+      Music.play(c, current.input.weather, { bars: opt.loop ? 0 : 8, morph: !opt.loop, onend: opt.onend }).catch(musicFail);
+      nowPlaying(c, null);
+    }
+    markPlaying(i);
+  }
+  function toggleCard(i) {
+    if (playingIdx === i && !seqOn) { stopMusic(); $("toast").textContent = ""; return; }
+    seqOn = false;
+    startCard(i, { loop: true });
+  }
+  function playFrom(i) {   // 카드마다 8마디씩 이어서 (Tone.js) / 30초씩 (💎 모드)
+    if (!seqOn || !current.cards[i]) { stopMusic(); $("toast").textContent = ""; return; }
+    startCard(i, { onend: function () { playFrom(i + 1); } });
+  }
+  function drawPremium() {
+    $("premiumBtn").setAttribute("aria-pressed", String(premium));
+    $("musicNote").textContent = premium
+      ? "💎 모드: 준비한 곡을 그대로 들려줘요 (발표용 · 끄면 Tone.js 연주)"
+      : "🎹 카드의 BPM·장르·분위기·날씨로 Tone.js가 브라우저에서 바로 연주해요 (무료 · 인터넷 없이 재생)";
+    $("musicCredit").hidden = !premium;   // 출처 표기는 💎 모드(준비한 곡 재생)일 때만
+  }
+  $("premiumBtn").addEventListener("click", function () {
+    premium = !premium;
+    try { localStorage.setItem(PREMIUM_KEY, premium ? "1" : "0"); } catch (e) {}
+    drawPremium();
+    var i = playingIdx, seq = seqOn;
+    if (i !== -1) {   // 듣는 중이었다면 같은 장면을 바뀐 방식으로 이어서
+      Music.stop(); Player.stop();
+      if (seq) playFrom(i); else startCard(i, { loop: true });
+    } else {
+      $("toast").textContent = premium ? "💎 모드 켜짐 — 준비한 곡을 그대로 틀어요" : "💎 모드 꺼짐 — Tone.js가 연주해요";
+    }
+  });
+  drawPremium();
+
+  $("playAllBtn").addEventListener("click", function () {
+    if (seqOn) { stopMusic(); $("toast").textContent = ""; return; }
+    seqOn = true; playFrom(0);
+  });
+
+  // ---------- 만들기 · 다시 만들기 ----------
+  $("makeBtn").addEventListener("click", function () {
+    var inp = currentInput(), rec = BGM.recommend(inp);
+    stopMusic(); stopTyping();
+    current = rec;
+    selectedIdx = 0;
+    runId++;
+    $("toast").textContent = "";
+    render(rec);                                  // 예시 문구로 먼저 채워 두고
+    playOpening(rec, runId, requestText(inp));    // 오프닝을 보는 동안 AI 문구를 기다림
+  });
+
+  $("skipBtn").addEventListener("click", function () {
+    if (!current) return;
+    clearOpening();
+    reveal(current, runId, null, requestText(currentInput()));
+  });
+
+  $("againBtn").addEventListener("click", function () {
+    runId++;
+    clearOpening(); stopTyping();
+    document.body.classList.remove("cinema", "prologue-mode");
+    stopMusic();
+    Theme.start();   // 다시 고르는 동안 오프닝 테마
+    go("page1");
+  });
+
+  // ---------- 이미지 저장: 결과를 포스터 한 장(PNG)으로 그림 ----------
+  function wrapText(ctx, text, maxWidth) {
+    // 띄어쓰기 단위로 줄을 바꾸고, 한 단어가 너무 길 때만 글자 단위로 자름
+    var lines = [], line = "";
+    var fits = function (s) { return ctx.measureText(s).width <= maxWidth; };
+    String(text).split(" ").forEach(function (word) {
+      var next = line ? line + " " + word : word;
+      if (fits(next)) { line = next; return; }
+      if (line) { lines.push(line); line = ""; }
+      word.split("").forEach(function (ch) {
+        if (!fits(line + ch) && line) { lines.push(line); line = ""; }
+        line += ch;
+      });
+    });
+    if (line) lines.push(line);
+    return lines;
+  }
+  function drawLines(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+    var lines = wrapText(ctx, text, maxWidth);
+    if (maxLines && lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + "…";
+    }
+    lines.forEach(function (l, i) { ctx.fillText(l, x, y + i * lineHeight); });
+    return y + lines.length * lineHeight;
+  }
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function makePosterCanvas(rec) {
+    var W = 1080, H = 1080, P = 60, GAP = 24;   // 앨범 커버처럼 정사각형
+    var SANS = "'Noto Sans KR', 'Malgun Gothic', sans-serif", SERIF = "'Noto Serif KR', 'Batang', serif";
+    var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var ctx = cv.getContext("2d");
+    ctx.fillStyle = "#0e0e13"; ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = "alphabetic"; ctx.textAlign = "center";
+
+    // 머리: 영화 제목 · 카피 · 흐름
+    ctx.fillStyle = "#a3a1ab"; ctx.font = "700 20px " + SANS;
+    ctx.fillText("T O D A Y ' S   M O V I E", W / 2, 80);
+    ctx.fillStyle = "#f3f1ec"; ctx.font = "900 52px " + SERIF;
+    var y = drawLines(ctx, rec.movieTitle, W / 2, 148, W - P * 2, 62, 2);
+    ctx.fillStyle = "#f2c14e"; ctx.font = "500 28px " + SANS;
+    y = drawLines(ctx, "“" + rec.copy + "”", W / 2, y + 2, W - P * 2, 38, 2);
+    ctx.fillStyle = "#a3a1ab"; ctx.font = "700 22px " + SANS;
+    ctx.fillText((rec.keep ? moodName(rec.from) + " 유지형" : moodName(rec.from) + " → " + moodName(rec.to)) + "   ·   " +
+      rec.cards.map(function (c) { return c.bpm; }).join(" → ") + " BPM", W / 2, y + 14);
+
+    // 카드 3장
+    var n = rec.cards.length, top = y + 50, cw = (W - P * 2 - GAP * (n - 1)) / n, ch = H - top - 90;
+    ctx.textAlign = "left";
+    rec.cards.forEach(function (c, i) {
+      var x = P + i * (cw + GAP), ix = x + 24, iw = cw - 48;
+      var ink = inkFor(c.colors) === "ink-dark" ? "#17161c" : "#fbfaf7";
+      var g = ctx.createLinearGradient(x, top, x + cw * 0.6, top + ch);
+      g.addColorStop(0, c.colors[0]); g.addColorStop(1, c.colors[1]);
+      roundRect(ctx, x, top, cw, ch, 22); ctx.fillStyle = g; ctx.fill();
+      if (c.kind === "now") { ctx.lineWidth = 5; ctx.strokeStyle = "#f3f1ec"; roundRect(ctx, x - 7, top - 7, cw + 14, ch + 14, 28); ctx.stroke(); }
+
+      ctx.fillStyle = ink;
+      ctx.font = "700 16px " + SANS; ctx.fillText(c.slot, ix, top + 44);
+      ctx.font = "900 27px " + SERIF;
+      var cy = drawLines(ctx, c.scene, ix, top + 88, iw, 36, 3);
+      ctx.globalAlpha = .85; ctx.font = "500 18px " + SANS; ctx.fillText(c.mod, ix, cy + 14); ctx.globalAlpha = 1;
+      ctx.font = "700 22px " + SANS;
+      cy = drawLines(ctx, c.genre, ix, cy + 46, iw, 30, 2);
+      ctx.font = "900 78px " + SANS; ctx.fillText(String(c.bpm), ix, cy + 76);
+      var bw = ctx.measureText(String(c.bpm)).width;
+      ctx.font = "700 20px " + SANS; ctx.fillText("BPM", ix + bw + 8, cy + 76);
+      // 템포 막대
+      ctx.globalAlpha = .3; roundRect(ctx, ix, cy + 96, iw, 6, 3); ctx.fill();
+      ctx.globalAlpha = 1;
+      roundRect(ctx, ix, cy + 96, iw * Math.max(.05, Math.min(1, (c.bpm - 50) / 90)), 6, 3); ctx.fill();
+      ctx.font = "400 19px " + SANS;
+      cy += 140;
+      c.lines.forEach(function (l) { cy = drawLines(ctx, l, ix, cy, iw, 28, 3) + 8; });
+      // 아래: 분위기 색 + 이름
+      var by = top + ch - 32;
+      c.colors.forEach(function (col, k) {
+        ctx.beginPath(); ctx.arc(ix + 11 + k * 28, by - 7, 10, 0, Math.PI * 2);
+        ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ink; ctx.stroke();
+      });
+      var mn = moodName(c.mood), fs = 19;
+      do { ctx.font = "700 " + fs + "px " + SANS; fs--; } while (fs > 12 && ctx.measureText(mn).width > iw - 66);   // 긴 이름은 글자를 줄임
+      ctx.fillStyle = ink; ctx.fillText(mn, ix + 66, by);
+    });
+
+    // 바닥글
+    ctx.textAlign = "center"; ctx.fillStyle = "#6f6d78"; ctx.font = "500 20px " + SANS;
+    ctx.fillText("Cinematic BGM Today  ·  " + today().replace(/-/g, ".") + "  ·  " +
+      BGM.WEATHER[rec.input.weather].emoji + " " + rec.input.weather, W / 2, H - 36);
+    return cv;
+  }
+  window.makePosterCanvas = makePosterCanvas;   // 화면 확인용
+
+  $("imageBtn").addEventListener("click", function () {
+    if (!current) return;
+    var rec = current;
+    // 웹 글꼴은 쓰는 글자만 받아 오므로, 그리기 전에 포스터에 들어갈 글자를 미리 불러 둠
+    var text = JSON.stringify(rec) + "TODAY'S MOVIE BPM MY Today 0123456789.→·“”";
+    var ready = document.fonts && document.fonts.load
+      ? Promise.all(["900 52px 'Noto Serif KR'", "400 19px 'Noto Sans KR'", "500 19px 'Noto Sans KR'",
+          "700 19px 'Noto Sans KR'", "900 78px 'Noto Sans KR'"].map(function (f) {
+          return document.fonts.load(f, text).catch(function () {});
+        }))
+      : Promise.resolve();
+    ready.then(function () {
+      var cv = makePosterCanvas(rec);
+      cv.toBlob(function (blob) {
+        if (!blob) { $("toast").textContent = "이미지를 만들지 못했어요. 화면 캡처를 이용해 주세요."; return; }
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Cinematic_BGM_Today_" + today() + ".png";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+        $("toast").textContent = "이미지를 다운로드 폴더에 저장했어요.";
+      }, "image/png");
+    });
+  });
+
+  // ---------- 저장 · 기록 ----------
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { return []; }
+  }
+  function saveHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); return true; } catch (e) { return false; }
+  }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  $("saveBtn").addEventListener("click", function () {
+    if (!current) return;
+    var entry = {
+      date: today(), from: current.from, to: current.to, weather: current.input.weather,
+      title: current.movieTitle, copy: current.copy,
+      bpms: current.cards.map(function (c) { return c.bpm; }),
+      input: current.input,   // 다시 보기: 같은 입력이면 같은 카드가 나옴
+      text: { movieTitle: current.movieTitle, copy: current.copy,
+        cards: current.cards.map(function (c) { return { scene: c.scene, lines: c.lines.slice() }; }) }
+    };
+    var list = loadHistory().filter(function (h) { return h.date !== entry.date; });
+    list.push(entry);
+    list.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var ok = saveHistory(list.slice(-30));
+    $("toast").textContent = ok ? "오늘의 하루를 기록에 저장했어요." : "이 브라우저에서는 저장할 수 없어요.";
+    drawHistory();
+  });
+
+  $("clearBtn").addEventListener("click", function () {
+    if (!confirm("저장된 기록을 모두 지울까요?")) return;
+    saveHistory([]);
+    drawHistory();
+  });
+
+  function dayKey(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function drawHistory() {
+    var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 6);
+    var min = dayKey(cutoff);
+    var list = loadHistory().filter(function (h) { return h.date >= min && BGM.MOOD[h.from] && BGM.MOOD[h.to]; });
+    $("history").hidden = list.length === 0;
+    var box = $("albums"); box.innerHTML = "";
+    list.forEach(function (h) {
+      var a = BGM.MOOD[h.from].colors[0], b = BGM.MOOD[h.to].colors[1];
+      var card = el("div", "album " + inkFor([a, b]));
+      card.style.background = "linear-gradient(135deg," + a + "," + b + ")";
+      card.appendChild(el("div", "date", h.date.slice(5).replace("-", ".") + " · " + h.weather));
+      card.appendChild(el("div", "t", h.title));
+      card.appendChild(el("div", "m", (h.from === h.to ? moodName(h.from) : moodName(h.from) + " → " + moodName(h.to)) + " · " + h.bpms.join("/")));
+      card.addEventListener("click", function () { reopen(h); });
+      box.appendChild(card);
+    });
+    drawTimeline(list);
+  }
+
+  // 최근 7일 타임라인: 날짜마다 그날의 장면 BPM 을 작은 선으로 (시작 기분 색 → 도착 기분 색)
+  function drawTimeline(list) {
+    var box = $("timeline"); box.innerHTML = "";
+    var W = 700, H = 232, L = 42, R = 14, T = 30, B = 40, lo = 55, hi = 140, colW = (W - L - R) / 7;
+    var y = function (bpm) { return T + (hi - bpm) / (hi - lo) * (H - T - B); };
+    var byDate = {}; list.forEach(function (h) { byDate[h.date] = h; });
+    var days = []; for (var i = 6; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate() - i); days.push(dayKey(d)); }
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "최근 7일 기분 타임라인 (BPM)");
+    var add = function (tag, attrs, text) {
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      svg.appendChild(e); return e;
+    };
+    [60, 80, 100, 120, 140].forEach(function (g) {   // 옅은 눈금선 + BPM 숫자
+      add("line", { x1: L, x2: W - R, y1: y(g), y2: y(g), stroke: "rgba(255,255,255,.08)", "stroke-width": 1 });
+      add("text", { x: L - 8, y: y(g) + 4, "text-anchor": "end", fill: "#a9a7b2", "font-size": 11 }, g);
+    });
+    add("text", { x: L - 8, y: 12, "text-anchor": "end", fill: "#a9a7b2", "font-size": 10 }, "BPM");
+    var tip = el("div", "tl-tip");
+    days.forEach(function (d, i) {
+      var cx = L + colW * (i + 0.5), h = byDate[d], isToday = i === 6;
+      add("text", { x: cx, y: H - 14, "text-anchor": "middle", fill: isToday ? "#f3f1ec" : "#a9a7b2",
+        "font-size": 12, "font-weight": isToday ? 700 : 400 }, d.slice(5).replace("-", ".") + (isToday ? " 오늘" : ""));
+      if (!h) { add("circle", { cx: cx, cy: y(95), r: 3, fill: "rgba(255,255,255,.15)" }); return; }
+      var n = h.bpms.length, pts = h.bpms.map(function (b, k) { return [cx + (k - (n - 1) / 2) * 22, y(b)]; });
+      add("polyline", { points: pts.map(function (p) { return p.join(","); }).join(" "), fill: "none",
+        stroke: "rgba(243,241,236,.6)", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" });
+      pts.forEach(function (p, k) {
+        var col = k === 0 ? BGM.MOOD[h.from].colors[0] : k === n - 1 ? BGM.MOOD[h.to].colors[1] : "#d9d6cf";
+        add("circle", { cx: p[0], cy: p[1], r: 5.5, fill: col, stroke: "#17171f", "stroke-width": 2 });
+      });
+      // 마우스를 올리면 그날 정보, 누르면 다시 보기 (점보다 넓은 영역)
+      var hit = add("rect", { x: cx - colW / 2, y: T - 6, width: colW, height: H - T - B + 12, fill: "transparent", style: "cursor:pointer" });
+      var top = Math.min.apply(null, pts.map(function (p) { return p[1]; }));
+      hit.addEventListener("mouseenter", function () {
+        tip.innerHTML = "";
+        tip.appendChild(el("b", null, d.slice(5).replace("-", ".") + " · " + wxEmoji(h.weather) + " " + h.weather));
+        tip.appendChild(el("div", null, moodName(h.from) + " → " + moodName(h.to)));
+        tip.appendChild(el("div", null, h.bpms.join(" → ") + " BPM"));
+        tip.appendChild(el("span", null, "「" + h.title + "」"));
+        tip.style.left = (cx / W * 100) + "%";
+        tip.style.top = (top / H * 100) + "%";
+        tip.classList.add("on");
+      });
+      hit.addEventListener("mouseleave", function () { tip.classList.remove("on"); });
+      hit.addEventListener("click", function () { reopen(h); });
+    });
+    box.appendChild(svg);
+    box.appendChild(tip);
+  }
+
+  // 저장한 날의 결과 다시 보기
+  function reopen(h) {
+    if (!h.input) { $("toast").textContent = "이 기록은 예전 방식으로 저장돼 다시 볼 수 없어요."; return; }
+    var rec = BGM.recommend(h.input);
+    if (h.text && h.text.cards && h.text.cards.length === rec.cards.length) BGM.applyText(rec, h.text);
+    stopMusic(); stopTyping(); clearOpening(); Theme.stop();
+    document.body.classList.remove("cinema");
+    current = rec; selectedIdx = 0; runId++;
+    render(rec);
+    $("status").textContent = "📼 " + h.date.slice(5).replace("-", ".") + " 기록 다시 보기";
+    $("toast").textContent = "";
+    go("result");
+  }
+
+  drawHistory();
+  setSlot(state.slot, false);
+  autoWeather();
+  playPrologue();
+})();
+</script>
+</body>
+</html>
